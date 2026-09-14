@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+# Virtual environments
+text_SQL/
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+
+# Data
+data/
+*.csv
+*.json
