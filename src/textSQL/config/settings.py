@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
 
-    database_url: str = ""
+    DATABASE_URL: str = ""
 
     llm_provider: str = "lmstudio"
 

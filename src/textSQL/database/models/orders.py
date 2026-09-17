@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime , timezone
 from decimal import Decimal
 
 from sqlalchemy import String, DateTime, ForeignKey, Numeric
@@ -55,5 +55,5 @@ class Order(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
-        default=datetime.now(datetime.timezone.utc)
+        default=datetime.now(timezone.utc)
     )

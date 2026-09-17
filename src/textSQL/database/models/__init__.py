@@ -58,3 +58,7 @@ from .campaign import Campaign
 from .customer_campaign import CustomerCampaign
 from .campaign_products import CampaignProduct
 from .campaign_conversion import CampaignConversion
+
+
+## Review
+from .review import Review
