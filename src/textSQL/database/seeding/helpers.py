@@ -21,6 +21,14 @@ def clear_database(session):
         "brands",
 
         "warehouses",
+        "inventory_transactions",
+        "inventory",
+        "campaign_conversions",
+        "customer_campaigns",
+        "campaign_products",
+        "campaigns",
+        "reviews",
+
     ]
 
     for table in tables:

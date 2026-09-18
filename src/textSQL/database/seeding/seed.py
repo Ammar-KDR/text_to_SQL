@@ -1,32 +1,15 @@
 from sqlalchemy.orm import Session
 
-from .config import DEFAULT_CONFIG
+from .config import CONFIG
 from .generators.user import seed_users
+from .generators.product import (
+    seed_products,
+)
 
+from .generators.inventory import (
+    seed_inventory,
+)
 
-# def seed_database(session: Session):
-
-#     config = DEFAULT_CONFIG
-
-#     print("Starting database seed...")
-
-#     seed_roles(session, config)
-
-#     seed_users(session, config)
-
-#     seed_customers(session, config)
-
-#     seed_products(session, config)
-
-#     seed_orders(session, config)
-
-#     seed_inventory(session, config)
-
-#     seed_marketing(session, config)
-
-#     seed_reviews(session, config)
-
-#     print("Database seed completed")
 
 from textSQL.database.connection import SessionLocal
 
@@ -41,7 +24,23 @@ from .generators.operations import (
     seed_warehouses,
 )
 from .helpers import clear_database
+from .generators.customer import (
+    seed_customer_domain,
+)
+from .generators.commerce_reference import (
+    seed_commerce_reference,
+)
 
+from .generators.order import (
+    seed_orders,
+)
+from .generators.marketing import (
+    seed_marketing_domain,
+)
+
+from .generators.review import (
+    seed_reviews,
+)
 def seed_database(reset=False):
 
     with SessionLocal() as session:
@@ -50,25 +49,97 @@ def seed_database(reset=False):
             print("Clearing database...")
             clear_database(session)
 
-
         print("Seeding reference data...")
 
-
         seed_security(session)
-        seed_users(session,20000)
 
         seed_brands(
             session,
-            SeedConfig.brands
+            CONFIG.brands,
         )
 
         seed_categories(session)
 
         seed_warehouses(session)
+
+        print(
+            "Reference data complete"
+        )
+
+        print("Seeding users...")
+
+        seed_users(
+            session,
+            CONFIG.users,
+        )
+
+        print("Users complete")
+
+        print(
+            "Seeding customer domain..."
+        )
+
+        seed_customer_domain(
+            session,
+            CONFIG.customers,
+            event_batch_size=
+                CONFIG.event_insert_batch_size,
+        )
+        print(
+    "Seeding product domain..."
+)
         
 
+        seed_products(
+            session,
+            CONFIG.products,
+        )
 
-        print("Reference data complete")
+
+        print(
+            "Seeding inventory domain..."
+        )
+
+        seed_inventory(
+            session,
+        )
+        print(
+    "Seeding commerce reference data..."
+)
+
+        seed_commerce_reference(
+            session
+        )
+
+
+        print(
+            "Seeding transactional domain..."
+        )
+        
+        seed_orders(
+            session,
+            CONFIG.orders,
+            batch_size=
+                CONFIG.order_batch_size,
+        )
+        print(
+    "Seeding marketing domain..."
+)
+
+        seed_marketing_domain(
+            session,
+            CONFIG.campaigns,
+        )
+
+
+        print(
+            "Seeding reviews..."
+        )
+
+        seed_reviews(
+            session,
+            CONFIG.reviews,
+        )
 
 
 if __name__ == "__main__":
@@ -78,5 +149,6 @@ if __name__ == "__main__":
     reset = "--reset" in sys.argv
 
     seed_database(reset=reset)
+
     
 
