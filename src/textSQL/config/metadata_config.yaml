@@ -1,0 +1,19 @@
+excluded_schemas:
+  - information_schema
+  - pg_catalog
+
+
+schemas:
+
+  public:
+    type: operational
+    description: "Application transactional database"
+
+
+  warehouse:
+    type: analytical
+    description: "Historical analytical warehouse"
+
+excluded_tables:
+
+  - alembic_version
