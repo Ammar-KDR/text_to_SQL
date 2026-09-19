@@ -88,6 +88,8 @@ class DatabaseMetadata(BaseModel):
     )
     relationships: list[RelationshipMetadata]
 
+    graph: object | None = None
+
 class MetricMetadata(BaseModel):
 
     name: str

@@ -8,8 +8,8 @@ from textSQL.metadata.relationship_inference import (
 from textSQL.metadata.cardinality_inference import (
     infer_cardinality
 )
-
-
+from textSQL.metadata.graph import build_schema_graph
+from textSQL.metadata.relationship_normalization import normalize_relationships
 def extract_database_metadata(
     engine,
     config: dict
@@ -32,7 +32,19 @@ def extract_database_metadata(
     relationships = infer_relationships(
     all_tables
 )
+    relationships = normalize_relationships(
+    relationships
+)
+    all_table_names = [
+    table.name
+    for schema in schemas
+    for table in schema.tables
+    ]
 
+    graph = build_schema_graph(
+    relationships,
+    all_table_names
+)
     relationships = [
     infer_cardinality(
         relationship,
@@ -48,7 +60,8 @@ def extract_database_metadata(
 
         schemas=schemas,
 
-        relationships=relationships
+        relationships=relationships,
+        graph=graph
 
     )
 

@@ -209,6 +209,56 @@ def infer_direct_relationship(
     )
 
 
+def infer_self_relationship(
+    relationship: RelationshipMetadata,
+) -> RelationshipMetadata:
+
+
+    if (
+        relationship.source_table
+        != relationship.target_table
+    ):
+        return relationship
+
+
+    return RelationshipMetadata(
+
+        source_table=
+        relationship.source_table,
+
+        target_table=
+        relationship.target_table,
+
+        relationship_type=
+        "self-referential",
+
+        source_cardinality=
+        "many",
+
+        target_cardinality=
+        "one",
+
+        source_optional=
+        relationship.source_optional,
+
+        target_optional=
+        relationship.target_optional,
+
+        through_table=None,
+
+        foreign_keys=
+        relationship.foreign_keys,
+
+        reasoning=
+        "Detected self-referential relationship where a table references itself, representing hierarchical data.",
+
+        confidence=calculate_relationship_confidence(
+    relationship_type="self-referential",
+    foreign_keys=relationship.foreign_keys,
+    through_table=None
+)
+    )
+
 def infer_relationships(
     tables: list[TableMetadata],
 ) -> list[RelationshipMetadata]:
@@ -252,10 +302,25 @@ def infer_relationships(
 
         for relationship in table.relationships:
 
-            inferred = infer_direct_relationship(
-                table,
-                relationship
-            )
+
+            if (
+                relationship.source_table
+                ==
+                relationship.target_table
+            ):
+
+                inferred = infer_self_relationship(
+                    relationship
+                )
+
+
+            else:
+
+                inferred = infer_direct_relationship(
+                    table,
+                    relationship
+                )
+
 
             relationships.append(
                 inferred
