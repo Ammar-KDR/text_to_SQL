@@ -1,4 +1,4 @@
-from textSQL.retreival.index import MetadataIndex
+from textSQL.retrieval.index import MetadataIndex
 
 from textSQL.metadata.models import (
     DatabaseMetadata,
@@ -243,3 +243,20 @@ def test_graph_is_attached():
 
 
     assert index.graph is graph
+
+def test_generic_object_lookup():
+
+    metadata = create_test_metadata()
+
+    graph = SchemaGraph()
+
+    index = MetadataIndex(
+        metadata,
+        graph,
+    )
+
+    metric = index.get_object(
+        "metric_revenue"
+    )
+
+    assert metric.name == "revenue"

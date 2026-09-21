@@ -31,6 +31,7 @@ class MetadataIndex:
 
         self.metrics: dict[str, MetricMetadata] = {}
         self.metric_aliases: dict[str, MetricMetadata] = {}
+        self.objects: dict[str, object] = {}
 
 
         self._build()
@@ -45,6 +46,8 @@ class MetadataIndex:
 
         self._index_metrics()
 
+        self._index_relationships()
+
 
 
     def _index_tables(self):
@@ -55,6 +58,11 @@ class MetadataIndex:
 
                 self.tables[
                     table.name
+                ] = table
+
+
+                self.objects[
+                    f"table_{table.name}"
                 ] = table
 
 
@@ -85,9 +93,41 @@ class MetadataIndex:
         for metric in self.metadata.metrics:
             self.metrics[metric.name.lower()]=metric
 
-        
-        for synonym in metric.synonyms:
-
-            self.metric_aliases[
-                synonym.lower()
+            self.objects[
+                f"metric_{metric.name}"
             ] = metric
+
+        
+            for synonym in metric.synonyms:
+
+                self.metric_aliases[
+                    synonym.lower()
+                ] = metric
+
+    def _index_relationships(
+            self,
+        ):
+
+        for relationship in self.metadata.relationships:
+
+            relationship_id = (
+                f"relationship_"
+                f"{relationship.source_table}_"
+                f"{relationship.target_table}"
+            )
+
+
+            self.objects[
+                relationship_id
+            ] = relationship
+
+    def get_object(
+    self,
+    object_id: str,
+):
+
+        return self.objects.get(
+            object_id
+        )
+
+    

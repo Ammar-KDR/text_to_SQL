@@ -75,3 +75,61 @@ class RetrievedContext(BaseModel):
     trace: list[RetrievalTrace] = Field(
         default_factory=list
     )
+
+class RetrievalCandidate(BaseModel):
+
+    object_id: str
+
+    object_type: str
+
+    object_name: str
+
+    score: float
+
+    source: str
+
+
+
+
+
+
+class FusedCandidate(BaseModel):
+
+
+    object_id: str
+
+    object_type: str
+
+    object_name: str
+
+
+    rrf_score: float
+
+
+    sources: list[str] = Field(
+        default_factory=list
+    )
+
+
+    original_candidates: list[
+        RetrievalCandidate
+    ] = Field(
+        default_factory=list
+    )
+
+class RetrievedObject(BaseModel):
+
+    object_id: str
+
+    object_type: str
+
+    object_name: str
+
+
+    object: object
+
+
+    rrf_score: float
+
+
+    sources: list[str]
