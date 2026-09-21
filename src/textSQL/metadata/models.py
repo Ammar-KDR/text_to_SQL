@@ -77,24 +77,13 @@ class SchemaMetadata(BaseModel):
     tables: list[TableMetadata] = Field(
         default_factory=list
     )
-
-class DatabaseMetadata(BaseModel):
-
-    database_name: str
-
-    
-    schemas: list[SchemaMetadata] = Field(
-        default_factory=list
-    )
-    relationships: list[RelationshipMetadata]
-
-    graph: object | None = None
-
 class MetricMetadata(BaseModel):
 
     name: str
 
     description: str
+
+    domain: str
 
     formula: str
 
@@ -104,7 +93,27 @@ class MetricMetadata(BaseModel):
 
     required_columns: list[str] = Field(default_factory=list)
 
+    required_metrics: list[str] = Field(default_factory=list)
+
     business_rules: list[str] = Field(default_factory=list)
 
     forbidden_sources: list[str] = Field(default_factory=list)
+
+    synonyms: list[str]
+
+    
+class DatabaseMetadata(BaseModel):
+
+    database_name: str
+
+    
+    schemas: list[SchemaMetadata] = Field(
+        default_factory=list
+    )
+    relationships: list[RelationshipMetadata]
+    metrics: list[MetricMetadata]
+
+    graph: object | None = None
+
+
 

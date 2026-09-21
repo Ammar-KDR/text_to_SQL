@@ -10,6 +10,13 @@ from textSQL.metadata.cardinality_inference import (
 )
 from textSQL.metadata.graph import build_schema_graph
 from textSQL.metadata.relationship_normalization import normalize_relationships
+
+
+import yaml
+
+from textSQL.metadata.models import MetricMetadata
+
+
 def extract_database_metadata(
     engine,
     config: dict
@@ -53,6 +60,8 @@ def extract_database_metadata(
     for relationship in relationships
         ]
 
+    metrics= MetricExtractor("src/textSQL/config/metadata_config.yaml")
+
 
     return DatabaseMetadata(
 
@@ -61,8 +70,8 @@ def extract_database_metadata(
         schemas=schemas,
 
         relationships=relationships,
-        graph=graph
-
+        graph=graph,
+        metrics=metrics
     )
 
 def extract_schemas(
@@ -295,3 +304,67 @@ def extract_relationships(
 
 
     return relationships
+
+
+
+
+
+class MetricExtractor:
+
+
+    def __init__(
+        self,
+        config_path: str,
+    ):
+
+        self.config_path = config_path
+
+
+
+    def extract(self):
+
+        metrics = [
+            MetricMetadata(**metric)
+            for metric in self._load_yaml()
+        ]
+
+        validate_metrics(metrics)
+
+        return metrics
+
+
+
+    def _load_yaml(self) -> list[dict]:
+
+        with open(
+            self.config_path,
+            "r",
+            encoding="utf-8",
+        ) as file:
+
+            data = yaml.safe_load(file)
+
+
+        return data.get(
+            "metrics",
+            []
+        )
+def validate_metrics(
+    metrics: list[MetricMetadata]
+):
+
+    names = {
+        metric.name
+        for metric in metrics
+    }
+
+
+    for metric in metrics:
+
+        for dependency in metric.required_metrics:
+
+            if dependency not in names:
+
+                raise ValueError(
+                    f"Metric '{metric.name}' depends on unknown metric '{dependency}'"
+                )

@@ -6,3 +6,5 @@ pydantic-settings
 pytest
 alembic
 pyyaml
+sentence-transformers
+qdrant-client
