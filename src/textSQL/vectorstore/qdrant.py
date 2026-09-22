@@ -156,7 +156,8 @@ class QdrantVectorStore(VectorStore):
                     vector=vector,
 
                     payload={
-
+                        "metadata_id": document.id,
+   
                         "object_type":
                             document.object_type,
 

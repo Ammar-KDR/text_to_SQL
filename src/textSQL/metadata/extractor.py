@@ -1,4 +1,4 @@
-from .models import DatabaseMetadata,SchemaMetadata,TableMetadata,ColumnMetadata,RelationshipMetadata
+from .models import DatabaseMetadata,SchemaMetadata,TableMetadata,ColumnMetadata,RelationshipMetadata,JoinConditionMetadata
 from sqlalchemy import inspect
 from .relationship_inference import infer_relationships
 
@@ -13,9 +13,14 @@ from textSQL.metadata.relationship_normalization import normalize_relationships
 
 
 import yaml
-
+from pathlib import Path
 from textSQL.metadata.models import MetricMetadata
 
+METRICS_CONFIG_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "config"
+    / "metrics.yaml"
+)
 
 def extract_database_metadata(
     engine,
@@ -43,7 +48,7 @@ def extract_database_metadata(
     relationships
 )
     all_table_names = [
-    table.name
+    table.qualified_name
     for schema in schemas
     for table in schema.tables
     ]
@@ -60,7 +65,12 @@ def extract_database_metadata(
     for relationship in relationships
         ]
 
-    metrics= MetricExtractor("src/textSQL/config/metadata_config.yaml")
+    metrics= MetricExtractor(METRICS_CONFIG_PATH).extract()
+
+    validate_metrics_against_schema(
+            metrics,
+            schemas,
+        )
 
 
     return DatabaseMetadata(
@@ -175,6 +185,7 @@ def extract_tables(
         tables.append(
             TableMetadata(
                 name=table_name,
+                schema_name=schema_name,
                 columns=columns,
                 relationships=relationships,
                 primary_keys=primary_keys
@@ -269,7 +280,7 @@ def extract_columns(
 def extract_relationships(
     inspector,
     table_name,
-    schema_name
+    schema_name,
 ) -> list[RelationshipMetadata]:
 
     relationships = []
@@ -278,29 +289,116 @@ def extract_relationships(
     foreign_keys = (
         inspector.get_foreign_keys(
             table_name,
-            schema=schema_name
+            schema=schema_name,
         )
     )
 
 
     for fk in foreign_keys:
 
+        source_columns = (
+            fk.get(
+                "constrained_columns",
+                [],
+            )
+            or []
+        )
+
+        target_columns = (
+            fk.get(
+                "referred_columns",
+                [],
+            )
+            or []
+        )
+
+
+        if (
+            len(source_columns)
+            !=
+            len(target_columns)
+        ):
+
+            raise ValueError(
+                "Foreign key column mismatch "
+                f"for {schema_name}."
+                f"{table_name}"
+            )
+
+
+        target_schema = (
+            fk.get("referred_schema")
+            or
+            schema_name
+        )
+
+
+        join_conditions = [
+
+            JoinConditionMetadata(
+
+                source_schema=
+                    schema_name,
+
+                source_table=
+                    table_name,
+
+                source_column=
+                    source_column,
+
+                target_schema=
+                    target_schema,
+
+                target_table=
+                    fk["referred_table"],
+
+                target_column=
+                    target_column,
+            )
+
+            for (
+                source_column,
+                target_column,
+            )
+            in zip(
+                source_columns,
+                target_columns,
+            )
+        ]
+
+
         relationships.append(
+
             RelationshipMetadata(
-    source_table=table_name,
 
-    target_table=fk["referred_table"],
+                source_schema=
+                    schema_name,
 
-    relationship_type="foreign_key",
+                source_table=
+                    table_name,
 
-    source_cardinality="unknown",
+                target_schema=
+                    target_schema,
 
-    target_cardinality="unknown",
+                target_table=
+                    fk["referred_table"],
 
-    foreign_keys=[
-        fk["constrained_columns"][0]
-    ]
-))
+                relationship_type=
+                    "foreign_key",
+
+                source_cardinality=
+                    "unknown",
+
+                target_cardinality=
+                    "unknown",
+
+                foreign_keys=
+                    source_columns,
+
+                join_conditions=
+                    join_conditions,
+            )
+        )
 
 
     return relationships
@@ -314,7 +412,7 @@ class MetricExtractor:
 
     def __init__(
         self,
-        config_path: str,
+        config_path: str | Path,
     ):
 
         self.config_path = config_path
@@ -368,3 +466,60 @@ def validate_metrics(
                 raise ValueError(
                     f"Metric '{metric.name}' depends on unknown metric '{dependency}'"
                 )
+
+def validate_metrics_against_schema(
+    metrics: list[MetricMetadata],
+    schemas: list[SchemaMetadata],
+):
+    tables = {}
+
+    for schema in schemas:
+        for table in schema.tables:
+            tables[table.name] = table
+
+
+    for metric in metrics:
+
+        for table_name in metric.required_tables:
+
+            if table_name not in tables:
+
+                raise ValueError(
+                    f"Metric '{metric.name}' references "
+                    f"unknown table '{table_name}'"
+                )
+
+
+        required_table_columns = set()
+
+        for table_name in metric.required_tables:
+
+            table = tables[table_name]
+
+            required_table_columns.update(
+                column.name
+                for column in table.columns
+            )
+
+
+        for column_name in metric.required_columns:
+
+            if column_name not in required_table_columns:
+
+                raise ValueError(
+                    f"Metric '{metric.name}' references "
+                    f"unknown column '{column_name}' "
+                    f"for its required tables"
+                )
+
+
+        if (
+            metric.authoritative_source is not None
+            and metric.authoritative_source not in tables
+        ):
+
+            raise ValueError(
+                f"Metric '{metric.name}' references "
+                f"unknown authoritative source "
+                f"'{metric.authoritative_source}'"
+            )

@@ -60,54 +60,81 @@ def infer_many_to_many(
 
     second = foreign_keys[1]
 
-
     relationships.append(
+
         RelationshipMetadata(
 
+            source_schema=
+                first.target_schema,
+
             source_table=
-            first.target_table,
+                first.target_table,
+
+            target_schema=
+                second.target_schema,
 
             target_table=
-            second.target_table,
+                second.target_table,
 
             relationship_type=
-            "many-to-many",
+                "many-to-many",
 
             source_cardinality=
-            "many",
+                "many",
 
             target_cardinality=
-            "many",
+                "many",
+
+            through_schema=
+                junction_table.schema_name,
 
             through_table=
-            junction_table.name,
+                junction_table.name,
 
-            
             foreign_keys=[
-                first.foreign_keys[0],
-                second.foreign_keys[0],
+                *first.foreign_keys,
+                *second.foreign_keys,
             ],
 
-            reasoning=generate_relationship_reasoning(
-                relationship_type="many-to-many",
-                through_table=junction_table.name,
-                foreign_keys=[
-                    first.foreign_keys[0],
-                    second.foreign_keys[0],
-                ],
-                source_optional=False,
-                target_optional=False
-            ),
+            join_conditions=[
+                *first.join_conditions,
+                *second.join_conditions,
+            ],
 
-            confidence=calculate_relationship_confidence(
-                relationship_type="many-to-many",
-                foreign_keys=[
-                    first.foreign_keys[0],
-                    second.foreign_keys[0],
-                ],
-                through_table=junction_table.name
-            )
-)
+            reasoning=
+                generate_relationship_reasoning(
+
+                    relationship_type=
+                        "many-to-many",
+
+                    through_table=
+                        junction_table.qualified_name,
+
+                    foreign_keys=[
+                        *first.foreign_keys,
+                        *second.foreign_keys,
+                    ],
+
+                    source_optional=False,
+
+                    target_optional=False,
+                ),
+
+            confidence=
+                calculate_relationship_confidence(
+
+                    relationship_type=
+                        "many-to-many",
+
+                    foreign_keys=[
+                        *first.foreign_keys,
+                        *second.foreign_keys,
+                    ],
+
+                    through_table=
+                        junction_table.qualified_name,
+                ),
+        )
     )
 
 
@@ -119,146 +146,167 @@ def infer_direct_relationship(
     relationship: RelationshipMetadata,
 ) -> RelationshipMetadata:
 
-
     fk_column = None
 
 
     for column in source_table.columns:
 
-        if column.name in relationship.foreign_keys:
+        if (
+            column.name
+            in relationship.foreign_keys
+        ):
 
             fk_column = column
+
             break
 
 
     if fk_column is None:
-
         return relationship
 
 
     if fk_column.is_unique:
 
-        return RelationshipMetadata(
+        return relationship.model_copy(
 
-            source_table=
-            relationship.source_table,
+            update={
 
-            target_table=
-            relationship.target_table,
+                "relationship_type":
+                    "one-to-one",
 
-            relationship_type=
-            "one-to-one",
+                "source_cardinality":
+                    "one",
 
-            source_cardinality=
-            "one",
+                "target_cardinality":
+                    "one",
 
-            target_cardinality=
-            "one",
+                "source_optional":
+                    fk_column.nullable,
 
-            foreign_keys=
-                relationship.foreign_keys
-            ,
-           reasoning=generate_relationship_reasoning(
-            relationship_type="one-to-one",
-            through_table=None,
-            foreign_keys=relationship.foreign_keys,
-            source_optional=fk_column.nullable,
-            target_optional=False
-        ),
+                "target_optional":
+                    False,
 
-        confidence=calculate_relationship_confidence(
-            relationship_type="one-to-one",
-            foreign_keys=relationship.foreign_keys,
-            through_table=None
+                "reasoning":
+                    generate_relationship_reasoning(
+                        relationship_type=
+                            "one-to-one",
+                        through_table=None,
+                        foreign_keys=
+                            relationship.foreign_keys,
+                        source_optional=
+                            fk_column.nullable,
+                        target_optional=False,
+                    ),
+
+                "confidence":
+                    calculate_relationship_confidence(
+                        relationship_type=
+                            "one-to-one",
+                        foreign_keys=
+                            relationship.foreign_keys,
+                        through_table=None,
+                    ),
+            }
         )
-)
 
 
-    return RelationshipMetadata(
-        source_table=
-        relationship.source_table,
+    return relationship.model_copy(
 
-        target_table=
-        relationship.target_table,
+        update={
 
-        relationship_type=
-        "many-to-one",
+            "relationship_type":
+                "many-to-one",
 
-        source_cardinality=
-        "many",
+            "source_cardinality":
+                "many",
 
-        target_cardinality=
-        "one",
+            "target_cardinality":
+                "one",
 
-        foreign_keys=
-            relationship.foreign_keys
-        ,
-        reasoning=generate_relationship_reasoning(
-        relationship_type="many-to-one",
-        through_table=None,
-        foreign_keys=relationship.foreign_keys,
-        source_optional=fk_column.nullable,
-        target_optional=False
-    ),
+            "source_optional":
+                fk_column.nullable,
 
-    confidence=calculate_relationship_confidence(
-        relationship_type="many-to-one",
-        foreign_keys=relationship.foreign_keys,
-        through_table=None
-    ),
+            "target_optional":
+                False,
+
+            "reasoning":
+                generate_relationship_reasoning(
+                    relationship_type=
+                        "many-to-one",
+                    through_table=None,
+                    foreign_keys=
+                        relationship.foreign_keys,
+                    source_optional=
+                        fk_column.nullable,
+                    target_optional=False,
+                ),
+
+            "confidence":
+                calculate_relationship_confidence(
+                    relationship_type=
+                        "many-to-one",
+                    foreign_keys=
+                        relationship.foreign_keys,
+                    through_table=None,
+                ),
+        }
     )
-
 
 def infer_self_relationship(
     relationship: RelationshipMetadata,
 ) -> RelationshipMetadata:
 
+    same_table = (
 
-    if (
         relationship.source_table
-        != relationship.target_table
-    ):
+        ==
+        relationship.target_table
+
+        and
+
+        relationship.source_schema
+        ==
+        relationship.target_schema
+    )
+
+
+    if not same_table:
         return relationship
 
 
-    return RelationshipMetadata(
+    return relationship.model_copy(
 
-        source_table=
-        relationship.source_table,
+        update={
 
-        target_table=
-        relationship.target_table,
+            "relationship_type":
+                "self-referential",
 
-        relationship_type=
-        "self-referential",
+            "source_cardinality":
+                "many",
 
-        source_cardinality=
-        "many",
+            "target_cardinality":
+                "one",
 
-        target_cardinality=
-        "one",
+            "through_table":
+                None,
 
-        source_optional=
-        relationship.source_optional,
+            "reasoning":
+                (
+                    "Detected self-referential "
+                    "relationship where a table "
+                    "references itself."
+                ),
 
-        target_optional=
-        relationship.target_optional,
-
-        through_table=None,
-
-        foreign_keys=
-        relationship.foreign_keys,
-
-        reasoning=
-        "Detected self-referential relationship where a table references itself, representing hierarchical data.",
-
-        confidence=calculate_relationship_confidence(
-    relationship_type="self-referential",
-    foreign_keys=relationship.foreign_keys,
-    through_table=None
-)
+            "confidence":
+                calculate_relationship_confidence(
+                    relationship_type=
+                        "self-referential",
+                    foreign_keys=
+                        relationship.foreign_keys,
+                    through_table=None,
+                ),
+        }
     )
-
 def infer_relationships(
     tables: list[TableMetadata],
 ) -> list[RelationshipMetadata]:
@@ -287,7 +335,7 @@ def infer_relationships(
     # Infer direct FK relationships
 
     junction_names = {
-        table.name
+        table.qualified_name
         for table in junction_tables
     }
 
@@ -296,7 +344,7 @@ def infer_relationships(
 
         # Skip junction tables
         # because their meaning was already captured
-        if table.name in junction_names:
+        if table.qualified_name in junction_names:
             continue
 
 

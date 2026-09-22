@@ -123,13 +123,14 @@ Business Rules:
         for schema in self.metadata.schemas:
 
             for table in schema.tables:
-
+                if table.schema_name is None:
+                    table.schema_name = schema.name
 
                 documents.append(
 
                     EmbeddingDocument(
 
-                        id=f"table_{table.name}",
+                        id=f"table_{table.qualified_name}",
 
                         object_type="table",
 
@@ -146,6 +147,10 @@ Business Rules:
 
                             "schema":
                                 schema.name,
+
+                            "qualified_name":
+                                table.qualified_name,
+
 
                         }
                     )
@@ -172,7 +177,7 @@ Business Rules:
 
         return f"""
 Table:
-{table.name}
+{table.qualified_name}
 
 Description:
 {table.description}
@@ -196,17 +201,15 @@ Columns:
             documents.append(
                 EmbeddingDocument(
 
-                    id=(
-                        f"relationship_"
-                        f"{relationship.source_table}_"
-                        f"{relationship.target_table}"
-                    ),
-
+                    id=relationship.object_id,
                     object_type="relationship",
 
                     object_name=(
-                        f"{relationship.source_table}_"
-                        f"{relationship.target_table}"
+
+                        f"{relationship.source_qualified_name}"
+                        f" -> "
+                        f"{relationship.target_qualified_name}"
+
                     ),
 
                     content=self._relationship_text(
@@ -214,15 +217,18 @@ Columns:
                     ),
 
                     metadata={
-                        "source_table":
-                            relationship.source_table,
 
-                        "target_table":
-                            relationship.target_table,
+                    "source_table":
+                        relationship
+                        .source_qualified_name,
 
-                        "relationship_type":
-                            relationship.relationship_type,
-                    }
+                    "target_table":
+                        relationship
+                        .target_qualified_name,
+
+                    "relationship_type":
+                        relationship.relationship_type,
+                },
                 )
             )
 

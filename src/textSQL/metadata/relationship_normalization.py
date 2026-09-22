@@ -12,29 +12,70 @@ def normalize_relationships(
 
     for relationship in relationships:
 
+        join_key = tuple(
 
-        # Only many-to-many is direction independent
-        if relationship.relationship_type == "many-to-many":
+            sorted(
+
+                (
+
+                    condition.source_schema,
+                    condition.source_table,
+                    condition.source_column,
+                    condition.target_schema,
+                    condition.target_table,
+                    condition.target_column,
+
+                )
+
+                for condition
+                in relationship.join_conditions
+
+            )
+        )
+
+
+        source = (
+            relationship
+            .source_qualified_name
+        )
+
+        target = (
+            relationship
+            .target_qualified_name
+        )
+
+
+        if (
+            relationship.relationship_type
+            ==
+            "many-to-many"
+        ):
 
             key = (
-                frozenset(
-                    [
-                        relationship.source_table,
-                        relationship.target_table,
-                    ]
-                ),
+
+                frozenset([
+                    source,
+                    target,
+                ]),
+
                 relationship.relationship_type,
-                relationship.through_table,
+
+                relationship.through_qualified_name,
+
+                join_key,
             )
 
         else:
 
-            # Direction matters
             key = (
-                relationship.source_table,
-                relationship.target_table,
+
+                source,
+
+                target,
+
                 relationship.relationship_type,
-                tuple(relationship.foreign_keys),
+
+                join_key,
             )
 
 

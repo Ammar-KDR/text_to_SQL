@@ -1,18 +1,24 @@
-from collections import defaultdict
+from collections import (
+    defaultdict,
+    deque,
+)
 
 from textSQL.metadata.models import (
     RelationshipMetadata,
 )
 
-from collections import deque
 
 class SchemaGraph:
 
+
     def __init__(self):
 
-        self.nodes = set()
+        self.nodes: set[str] = set()
 
-        self.edges = defaultdict(list)
+        self.edges: dict[
+            str,
+            list[RelationshipMetadata],
+        ] = defaultdict(list)
 
 
     def add_table(
@@ -30,35 +36,74 @@ class SchemaGraph:
         relationship: RelationshipMetadata,
     ):
 
+        source = (
+            relationship
+            .source_qualified_name
+        )
+
+        target = (
+            relationship
+            .target_qualified_name
+        )
+
+
+        self.nodes.add(source)
+
+        self.nodes.add(target)
+
+
         self.edges[
-            relationship.source_table
+            source
         ].append(
             relationship
         )
 
         self.edges[
-            relationship.target_table
+            target
         ].append(
             relationship
         )
+
+
     def find_path(
-                self,
-                start_table: str,
-                target_table: str,
-            ):
-    
-        if start_table == target_table:
+        self,
+        start_table: str,
+        target_table: str,
+    ):
+
+        if (
+            start_table
+            not in self.nodes
+        ):
+
+            return None
+
+
+        if (
+            target_table
+            not in self.nodes
+        ):
+
+            return None
+
+
+        if (
+            start_table
+            ==
+            target_table
+        ):
+
             return []
 
 
-        queue = deque(
-            [
-                (
-                    start_table,
-                    []
-                )
-            ]
-        )
+        queue = deque([
+
+            (
+                start_table,
+                [],
+            )
+
+        ])
 
 
         visited = {
@@ -68,19 +113,33 @@ class SchemaGraph:
 
         while queue:
 
-            current, path = queue.popleft()
+            current, path = (
+                queue.popleft()
+            )
 
 
-            for relationship in self.edges[current]:
+            for relationship in (
+                self.edges[current]
+            ):
 
-                if (
-                    relationship.source_table
-                    == current
-                ):
-                    neighbor = relationship.target_table
+                source = (
+                    relationship
+                    .source_qualified_name
+                )
+
+                target = (
+                    relationship
+                    .target_qualified_name
+                )
+
+
+                if source == current:
+
+                    neighbor = target
 
                 else:
-                    neighbor = relationship.source_table
+
+                    neighbor = source
 
 
                 if neighbor in visited:
@@ -88,15 +147,22 @@ class SchemaGraph:
 
 
                 new_path = (
+
                     path
+
                     +
+
                     [
                         relationship
                     ]
                 )
 
 
-                if neighbor == target_table:
+                if (
+                    neighbor
+                    ==
+                    target_table
+                ):
 
                     return new_path
 
@@ -107,10 +173,12 @@ class SchemaGraph:
 
 
                 queue.append(
+
                     (
                         neighbor,
-                        new_path
+                        new_path,
                     )
+
                 )
 
 
@@ -118,7 +186,9 @@ class SchemaGraph:
 
 
 def build_schema_graph(
-    relationships: list[RelationshipMetadata],
+    relationships: list[
+        RelationshipMetadata
+    ],
     tables: list[str],
 ):
 

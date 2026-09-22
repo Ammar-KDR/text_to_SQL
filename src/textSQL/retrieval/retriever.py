@@ -22,7 +22,9 @@ from textSQL.retrieval.model import (
     RetrievedContext,
 )
 
-
+from textSQL.retrieval.seed_selector import (
+    SeedSelector,
+)
 
 class Retriever:
 
@@ -34,6 +36,7 @@ class Retriever:
         graph_retriever: GraphRetriever,
         fusion: Fusion,
         context_builder: ContextBuilder,
+        seed_selector: SeedSelector | None=None,
     ):
 
         self.dense_retriever = (
@@ -54,6 +57,10 @@ class Retriever:
             context_builder
         )
 
+        self.seed_selector = (
+            seed_selector
+        )
+
 
 
     def retrieve(
@@ -70,12 +77,27 @@ class Retriever:
                 limit,
             )
         )
+        if self.seed_selector is not None:
+
+            seed_candidates = (
+                self.seed_selector
+                .select(
+                    question,
+                    dense_candidates,
+                )
+            )
+
+        else:
+
+            seed_candidates = (
+                dense_candidates
+            )
 
 
         dependency_candidates = (
             self.dependency_resolver
             .resolve(
-                dense_candidates
+                seed_candidates
             )
         )
 
@@ -92,7 +114,7 @@ class Retriever:
             self.fusion
             .combine(
 
-                dense_candidates,
+                seed_candidates,
 
                 dependency_candidates,
 

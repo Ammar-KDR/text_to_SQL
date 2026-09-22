@@ -11,7 +11,6 @@ from textSQL.metadata.graph import (
 )
 
 
-
 class GraphRetriever:
 
 
@@ -21,77 +20,136 @@ class GraphRetriever:
         graph: SchemaGraph,
     ):
 
-        self.metadata_index = metadata_index
+        self.metadata_index = (
+            metadata_index
+        )
 
         self.graph = graph
 
 
-
     def retrieve(
-        self,
-        candidates: list[RetrievalCandidate],
-    ) -> list[RetrievalCandidate]:
-
+    self,
+    candidates: list[RetrievalCandidate],
+) -> list[RetrievalCandidate]:
 
         tables = [
 
-            candidate.object_name
+            self._table_identity(
+                candidate
+            )
 
-            for candidate in candidates
+            for candidate
+            in candidates
 
-            if candidate.object_type == "table"
-
+            if (
+                candidate.object_type
+                ==
+                "table"
+            )
         ]
 
 
-        relationships = []
+        # Remove duplicate table identities
+        # while preserving their order.
+        tables = list(
+            dict.fromkeys(
+                tables
+            )
+        )
 
 
-        for i, source in enumerate(tables):
-
-            for target in tables[i + 1:]:
+        relationship_candidates = {}
 
 
-                path = self.graph.find_path(
-                    source,
-                    target,
+        for i, source in enumerate(
+            tables
+        ):
+
+            for target in tables[
+                i + 1:
+            ]:
+
+                path = (
+                    self.graph
+                    .find_path(
+                        source,
+                        target,
+                    )
                 )
 
 
                 if not path:
-
                     continue
 
 
                 for relationship in path:
 
                     relationship_id = (
-                        "relationship_"
-                        f"{relationship.source_table}_"
-                        f"{relationship.target_table}"
+                        relationship.object_id
                     )
 
 
-                    relationships.append(
+                    # The same edge may occur
+                    # in multiple table-pair paths.
+                    #
+                    # It must only become one
+                    # retrieval candidate.
+                    if (
+                        relationship_id
+                        in relationship_candidates
+                    ):
+                        continue
 
-                        RetrievalCandidate(
 
-                            object_id=
+                    relationship_candidates[
+                        relationship_id
+                    ] = RetrievalCandidate(
+
+                        object_id=
                             relationship_id,
 
-                            object_type=
+                        object_type=
                             "relationship",
 
-                            object_name=
-                            relationship_id,
+                        object_name=(
 
-                            score=1.0,
+                            f"{relationship.source_qualified_name}"
+                            f" -> "
+                            f"{relationship.target_qualified_name}"
 
-                            source=
+                        ),
+
+                        score=
+                            1.0,
+
+                        source=
                             "graph",
-
-                        )
                     )
 
 
-        return relationships
+        return list(
+            relationship_candidates.values()
+        )
+
+
+    def _table_identity(
+        self,
+        candidate: RetrievalCandidate,
+    ) -> str:
+
+        prefix = "table_"
+
+
+        if (
+            candidate.object_id
+            .startswith(prefix)
+        ):
+
+            return (
+                candidate.object_id[
+                    len(prefix):
+                ]
+            )
+
+
+        return candidate.object_name

@@ -27,6 +27,11 @@ class MetadataIndex:
 
         self.tables: dict[str, TableMetadata] = {}
 
+        self.table_aliases: dict[
+            str,
+            list[TableMetadata],
+        ] = defaultdict(list)
+
         self.columns: dict[str, list[ColumnMetadata]] = defaultdict(list)
 
         self.metrics: dict[str, MetricMetadata] = {}
@@ -56,13 +61,27 @@ class MetadataIndex:
 
             for table in schema.tables:
 
+                if table.schema_name is None:
+                    table.schema_name = schema.name
+                
+                qualified_name = (
+                    table.qualified_name.lower()
+                )
+
+
                 self.tables[
-                    table.name
+                    qualified_name
                 ] = table
+                
+                self.table_aliases[
+                    table.name.lower()
+                ].append(
+                    table
+                )
 
 
                 self.objects[
-                    f"table_{table.name}"
+                    f"table_{table.qualified_name}"
                 ] = table
 
 
@@ -105,20 +124,15 @@ class MetadataIndex:
                 ] = metric
 
     def _index_relationships(
-            self,
+    self,
+):
+
+        for relationship in (
+            self.metadata.relationships
         ):
 
-        for relationship in self.metadata.relationships:
-
-            relationship_id = (
-                f"relationship_"
-                f"{relationship.source_table}_"
-                f"{relationship.target_table}"
-            )
-
-
             self.objects[
-                relationship_id
+                relationship.object_id
             ] = relationship
 
     def get_object(
@@ -130,4 +144,30 @@ class MetadataIndex:
             object_id
         )
 
-    
+
+    def get_table(
+    self,
+    table_name: str,
+) -> TableMetadata | None:
+
+        normalized = table_name.lower()
+
+        # Exact qualified lookup first
+        table = self.tables.get(
+            normalized
+        )
+
+        if table is not None:
+            return table
+
+        # Fall back to bare name only
+        # when it resolves uniquely
+        matches = self.table_aliases.get(
+            normalized,
+            [],
+        )
+
+        if len(matches) == 1:
+            return matches[0]
+
+        return None

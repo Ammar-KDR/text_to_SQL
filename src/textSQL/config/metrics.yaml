@@ -18,11 +18,11 @@ metrics:
       - net sales
 
     description: >
-      Net revenue generated from completed sales after refunds
-      and business adjustments.
+      Net merchandise revenue after item discounts and completed
+      refund adjustments.
 
     formula: >
-      SUM(fact_sales.net_amount)
+      SUM(fact_sales.revenue)
 
     authoritative_source: fact_sales
 
@@ -30,21 +30,59 @@ metrics:
       - fact_sales
 
     required_columns:
-      - net_amount
+      - revenue
       - order_id
       - date_key
 
     required_metrics: []
 
     business_rules:
-      - Exclude cancelled orders
-      - Exclude refunded amounts
-      - Prefer warehouse fact_sales as authoritative source
+      - fact_sales.revenue is already adjusted for item discounts
+      - completed refund amounts are already reflected in fact_sales.revenue
+      - cancelled orders are excluded from fact_sales
+      - Prefer fact_sales as the authoritative analytical revenue source
 
     forbidden_sources:
       - payments
+      - orders
 
+  - name: profit
 
+    domain: sales
+
+    synonyms:
+      - net profit
+      - sales profit
+      - merchandise profit
+
+    description: >
+      Profit generated from merchandise sales after revenue and
+      historical transaction cost adjustments.
+
+    formula: >
+      SUM(fact_sales.profit)
+
+    authoritative_source: fact_sales
+
+    required_tables:
+      - fact_sales
+
+    required_columns:
+      - profit
+      - revenue
+      - cost
+      - date_key
+
+    required_metrics:
+      - revenue
+
+    business_rules:
+      - profit equals revenue minus cost
+      - historical sales cost originates from order_items.unit_cost
+      - Prefer fact_sales as the authoritative analytical profit source
+
+    forbidden_sources:
+      - payments
 
   - name: gross_sales
 
@@ -56,7 +94,7 @@ metrics:
       - sales volume
 
     description: >
-      Total sales value before refunds and adjustments.
+      Total merchandise sales value before refund adjustments.
 
     formula: >
       SUM(order_items.line_total)
@@ -65,14 +103,17 @@ metrics:
 
     required_tables:
       - order_items
+      - orders
 
     required_columns:
       - line_total
+      - order_id
+      - order_status
 
     required_metrics: []
 
     business_rules:
-      - Include completed transactions only
+      - Order status must be considered when determining eligible sales
 
     forbidden_sources:
       - payments
@@ -101,7 +142,7 @@ metrics:
 
     required_columns:
       - order_id
-      - status
+      - order_status
 
     required_metrics: []
 
@@ -134,8 +175,9 @@ metrics:
       - orders
 
     required_columns:
-      - net_amount
+      - revenue
       - order_id
+      - order_status
 
     required_metrics:
       - revenue
@@ -152,41 +194,46 @@ metrics:
   # CUSTOMER METRICS
   # ==========================
 
+  # ==========================
+  # CUSTOMER METRICS
+  # ==========================
+
 
   - name: active_customers
 
     domain: customer
 
     synonyms:
-      - engaged customers
-      - current customers
       - purchasing customers
+      - buying customers
+      - active buyers
 
     description: >
-      Customers who performed at least one completed transaction
-      during a selected time period.
+      Customers represented in sales activity during a selected
+      time period.
 
     formula: >
-      COUNT(DISTINCT customer_id)
+      COUNT(DISTINCT fact_sales.customer_key)
 
-    authoritative_source: fact_customer_activity
+    authoritative_source: fact_sales
 
     required_tables:
-      - fact_customer_activity
-      - dim_customer
+      - fact_sales
+      - dim_date
 
     required_columns:
-      - customer_id
-      - activity_date
+      - customer_key
+      - date_key
+      - full_date
 
     required_metrics: []
 
     business_rules:
-      - Time period must be defined
-      - Only customers with valid activity are counted
+      - A time period must be defined
+      - Customer activity for this metric is based on sales records
 
-    forbidden_sources: []
-
+    forbidden_sources:
+      - customer_events
 
 
   - name: customer_lifetime_value
@@ -203,7 +250,7 @@ metrics:
       with the business.
 
     formula: >
-      SUM(revenue) GROUP BY customer_id
+      SUM(fact_sales.revenue) GROUP BY fact_sales.customer_key
 
     authoritative_source: fact_sales
 
@@ -213,18 +260,18 @@ metrics:
 
     required_columns:
       - customer_key
-      - net_amount
+      - customer_id
+      - revenue
 
     required_metrics:
       - revenue
 
     business_rules:
-      - Refunds excluded
-      - Customer aggregation required
+      - Refunds are already reflected in the authoritative revenue metric
+      - Customer aggregation is required
 
     forbidden_sources:
       - payments
-
 
 
   - name: customer_retention_rate
@@ -237,29 +284,32 @@ metrics:
       - repeat customers
 
     description: >
-      Percentage of customers who continue purchasing after
-      their initial purchase period.
+      Percentage of customers from a baseline purchasing period
+      who also purchase during a later retention period.
 
     formula: >
-      retained_customers / total_customers
+      retained_customers / baseline_customers
 
-    authoritative_source: fact_customer_activity
+    authoritative_source: fact_sales
 
     required_tables:
-      - fact_customer_activity
+      - fact_sales
+      - dim_date
 
     required_columns:
-      - customer_id
-      - activity_date
+      - customer_key
+      - date_key
+      - full_date
 
     required_metrics: []
 
     business_rules:
-      - Requires comparison between different time periods
+      - A baseline period must be defined
+      - A retention period must be defined
+      - A retained customer must have sales activity in both periods
 
-    forbidden_sources: []
-
-
+    forbidden_sources:
+      - customer_events
 
   # ==========================
   # PRODUCT METRICS
@@ -279,7 +329,7 @@ metrics:
       Revenue contribution generated by individual products.
 
     formula: >
-      SUM(fact_sales.net_amount) GROUP BY product_id
+      SUM(fact_sales.revenue) GROUP BY fact_sales.product_key
 
     authoritative_source: fact_sales
 
@@ -289,7 +339,8 @@ metrics:
 
     required_columns:
       - product_key
-      - net_amount
+      - product_name
+      - revenue
 
     required_metrics:
       - revenue
@@ -324,7 +375,8 @@ metrics:
 
     required_columns:
       - product_key
-      - net_amount
+      - revenue
+      - product_name
 
     required_metrics:
       - product_revenue
@@ -340,7 +392,6 @@ metrics:
   # INVENTORY METRICS
   # ==========================
 
-
   - name: available_inventory
 
     domain: inventory
@@ -351,17 +402,20 @@ metrics:
       - stock availability
 
     description: >
-      Inventory currently available for sale after reserved stock.
+      Current inventory available for sale after subtracting
+      reserved stock.
 
     formula: >
-      quantity_on_hand - quantity_reserved
+      inventory.quantity_on_hand - inventory.quantity_reserved
 
-    authoritative_source: fact_inventory_snapshot
+    authoritative_source: inventory
 
     required_tables:
-      - fact_inventory_snapshot
+      - inventory
 
     required_columns:
+      - warehouse_id
+      - variant_id
       - quantity_on_hand
       - quantity_reserved
 
@@ -369,49 +423,49 @@ metrics:
 
     business_rules:
       - Reserved inventory cannot be sold
+      - inventory represents current inventory state
 
-    forbidden_sources: []
+    forbidden_sources:
+      - inventory_transactions
 
 
+  # - name: inventory_turnover
 
-  - name: inventory_turnover
+  #   domain: inventory
 
-    domain: inventory
+  #   synonyms:
+  #     - stock turnover
+  #     - inventory efficiency
 
-    synonyms:
-      - stock turnover
-      - inventory efficiency
+  #   description: >
+  #     How frequently inventory is sold and replaced during a period.
 
-    description: >
-      How frequently inventory is sold and replaced during a period.
+  #   formula: >
+  #     cost_of_goods_sold / average_inventory
 
-    formula: >
-      cost_of_goods_sold / average_inventory
+  #   authoritative_source: fact_inventory_snapshot
 
-    authoritative_source: fact_inventory_snapshot
+  #   required_tables:
+  #     - fact_inventory_snapshot
+  #     - fact_sales
 
-    required_tables:
-      - fact_inventory_snapshot
-      - fact_sales
+  #   required_columns:
+  #     - quantity_on_hand
+  #     - cost
 
-    required_columns:
-      - quantity_on_hand
-      - cost
+  #   required_metrics:
+  #     - revenue
 
-    required_metrics:
-      - revenue
+  #   business_rules:
+  #     - Requires a defined time period
 
-    business_rules:
-      - Requires a defined time period
-
-    forbidden_sources: []
+  #   forbidden_sources: []
 
 
 
   # ==========================
   # CAMPAIGN METRICS
   # ==========================
-
 
   - name: campaign_conversion_rate
 
@@ -422,30 +476,31 @@ metrics:
       - conversion percentage
 
     description: >
-      Percentage of targeted customers who completed a purchase
-      after campaign exposure.
+      Percentage of customers associated with a campaign who have
+      an explicitly recorded campaign conversion.
 
     formula: >
-      conversions / targeted_customers
+      converted_customers / campaign_customers
 
     authoritative_source: campaign_conversions
 
     required_tables:
       - campaign_conversions
+      - customer_campaigns
       - campaigns
 
     required_columns:
       - campaign_id
       - customer_id
-      - conversion_status
+      - order_id
 
     required_metrics: []
 
     business_rules:
-      - Requires campaign attribution rules
+      - Conversions must come from explicit campaign_conversions records
+      - Do not infer campaign conversions from matching dates alone
 
     forbidden_sources: []
-
 
 
   - name: campaign_revenue
@@ -457,27 +512,28 @@ metrics:
       - marketing revenue
 
     description: >
-      Revenue attributed to marketing campaigns.
+      Net merchandise revenue attributed to marketing campaigns.
 
     formula: >
-      SUM(fact_sales.net_amount)
+      SUM(fact_sales.revenue)
 
     authoritative_source: fact_sales
 
     required_tables:
       - fact_sales
-      - campaign_conversions
       - dim_campaign
 
     required_columns:
       - campaign_key
-      - net_amount
+      - campaign_name
+      - revenue
 
     required_metrics:
       - revenue
 
     business_rules:
-      - Campaign attribution method must be defined
+      - Campaign attribution comes from the campaign key populated through explicit conversion attribution
+      - Do not infer campaign attribution from matching dates
 
     forbidden_sources: []
 
@@ -500,7 +556,7 @@ metrics:
       Percentage of payment attempts that successfully completed.
 
     formula: >
-      successful_payments / payment_attempts
+      successful_payment_attempts / total_payment_attempts
 
     authoritative_source: payments
 
@@ -508,15 +564,14 @@ metrics:
       - payments
 
     required_columns:
-      - status
+      - payment_status
       - attempted_at
       - completed_at
 
     required_metrics: []
 
-    business_rules:
-      - Payment status determines success
-
+    business_rules: []
+      
     forbidden_sources: []
 
 
