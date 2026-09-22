@@ -607,7 +607,7 @@ metrics:
 
     required_metrics: []
 
-    business_rules:
-      - Include approved reviews only
+    business_rules: []
+      
 
     forbidden_sources: []

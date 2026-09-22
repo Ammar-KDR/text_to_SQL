@@ -2,350 +2,678 @@ from textSQL.retrieval.retriever import (
     Retriever,
 )
 
-from textSQL.retrieval.query_encoder import (
-    QueryEncoder,
-)
-
-from textSQL.embeddings.encoder import (
-    EmbeddingEncoder,
-)
-
-from textSQL.metadata.models import (
-    MetricMetadata,
-    TableMetadata,
-    ColumnMetadata,
-)
-
 from textSQL.retrieval.model import (
+    RetrievalCandidate,
+    FusedCandidate,
     RetrievedContext,
 )
 
 
-
-class FakeEncoder(EmbeddingEncoder):
-
-
-    def encode(
-        self,
-        texts: list[str],
-    ):
-
-        return [
-            [
-                0.1,
-                0.2,
-                0.3,
-            ]
-            for _ in texts
-        ]
+# ============================================================
+# HELPERS
+# ============================================================
 
 
+def candidate(
+    object_id,
+    object_type,
+    object_name,
+    source,
+    score=1.0,
+):
 
-class FakeQueryEncoder:
+    return RetrievalCandidate(
 
+        object_id=
+            object_id,
 
-    def encode_query(
-        self,
-        question: str,
-    ):
+        object_type=
+            object_type,
 
-        return [
-            0.1,
-            0.2,
-            0.3,
-        ]
+        object_name=
+            object_name,
 
+        score=
+            score,
 
-
-class FakeVectorResult:
-
-
-    def __init__(
-        self,
-        metadata_id,
-        object_type,
-        object_name,
-        score,
-    ):
-
-        self.payload = {
-
-            "metadata_id":
-                metadata_id,
-
-            "object_type":
-                object_type,
-
-            "object_name":
-                object_name,
-
-        }
-
-        self.score = score
+        source=
+            source,
+    )
 
 
-
-class FakeVectorStore:
-
-
-    def search(
-        self,
-        vector,
-        limit,
-    ):
-
-        return [
-
-            FakeVectorResult(
-
-                metadata_id=
-                "metric_revenue",
-
-                object_type=
-                "metric",
-
-                object_name=
-                "revenue",
-
-                score=0.95,
-
-            ),
-
-            FakeVectorResult(
-
-                metadata_id=
-                "table_fact_sales",
-
-                object_type=
-                "table",
-
-                object_name=
-                "fact_sales",
-
-                score=0.90,
-
-            ),
-
-        ]
+# ============================================================
+# FAKES
+# ============================================================
 
 
-
-class FakeMetadataIndex:
+class FakeDenseRetriever:
 
 
     def __init__(self):
 
-        self.objects = {
+        self.question = None
+
+        self.limit = None
 
 
-            "metric_revenue":
-            MetricMetadata(
-
-                name="revenue",
-
-                domain="sales",
-
-                synonyms=[
-                    "sales"
-                ],
-
-                description=
-                "Revenue metric",
-
-                formula=
-                "SUM(amount)",
-
-                authoritative_source=
-                "fact_sales",
-
-                required_tables=[
-                    "fact_sales"
-                ],
-
-                required_columns=[
-                    "amount"
-                ],
-
-                required_metrics=[],
-
-                business_rules=[],
-
-                forbidden_sources=[],
-
-            ),
-
-
-            "table_fact_sales":
-
-            TableMetadata(
-
-                name="fact_sales",
-
-                description=
-                "Sales fact table",
-
-                business_role=
-                "Sales source",
-
-                columns=[
-
-                    ColumnMetadata(
-
-                        name="amount",
-
-                        data_type=
-                        "decimal",
-
-                        nullable=False,
-
-                    )
-
-                ],
-
-            )
-
-        }
-
-
-
-    def get_object(
+    def retrieve(
         self,
-        object_id,
+        question,
+        limit,
     ):
 
-        return self.objects.get(
-            object_id
+        self.question = question
+
+        self.limit = limit
+
+
+        return [
+
+            candidate(
+
+                "metric_revenue",
+
+                "metric",
+
+                "revenue",
+
+                "dense",
+
+                0.90,
+            ),
+
+            candidate(
+
+                "metric_profit",
+
+                "metric",
+
+                "profit",
+
+                "dense",
+
+                0.85,
+            ),
+
+        ]
+
+
+class FakeSeedSelector:
+
+
+    def __init__(self):
+
+        self.question = None
+
+        self.received = None
+
+
+    def select(
+        self,
+        question,
+        candidates,
+    ):
+
+        self.question = question
+
+        self.received = candidates
+
+
+        # Simulate explicit-intent pruning:
+        #
+        # "show revenue"
+        #
+        # keeps revenue and removes profit.
+
+        return [
+            candidates[0]
+        ]
+
+
+class FakeDependencyResolver:
+
+
+    def __init__(self):
+
+        self.received = None
+
+
+    def resolve(
+        self,
+        candidates,
+    ):
+
+        self.received = candidates
+
+
+        return (
+
+            list(candidates)
+
+            +
+
+            [
+
+                candidate(
+
+                    "table_warehouse.fact_sales",
+
+                    "table",
+
+                    "fact_sales",
+
+                    "dependency",
+                )
+
+            ]
+
         )
 
 
+class FakeGraphRetriever:
 
-def test_retriever_returns_context():
+
+    def __init__(self):
+
+        self.received = None
+
+
+    def retrieve(
+        self,
+        candidates,
+    ):
+
+        self.received = candidates
+
+
+        # Revenue + fact_sales require no join.
+
+        return []
+
+
+class FakeFusion:
+
+
+    def __init__(self):
+
+        self.received = None
+
+
+    def combine(
+        self,
+        *candidate_lists,
+    ):
+
+        self.received = (
+            candidate_lists
+        )
+
+
+        merged = {}
+
+
+        for candidate_list in (
+            candidate_lists
+        ):
+
+            for item in candidate_list:
+
+                if (
+                    item.object_id
+                    in merged
+                ):
+                    continue
+
+
+                merged[
+                    item.object_id
+                ] = FusedCandidate(
+
+                    object_id=
+                        item.object_id,
+
+                    object_type=
+                        item.object_type,
+
+                    object_name=
+                        item.object_name,
+
+                    rrf_score=
+                        0.05,
+
+                    sources=[
+                        item.source
+                    ],
+                )
+
+
+        return list(
+            merged.values()
+        )
+
+
+class FakeContextBuilder:
+
+
+    def __init__(self):
+
+        self.question = None
+
+        self.received = None
+
+
+    def build(
+        self,
+        question,
+        candidates,
+    ):
+
+        self.question = question
+
+        self.received = candidates
+
+
+        return RetrievedContext(
+
+            question=
+                question,
+
+            tables=[],
+
+            relationships=[],
+
+            metrics=[],
+
+            join_paths=[],
+
+            trace=[],
+        )
+
+
+# ============================================================
+# CURRENT PIPELINE
+# ============================================================
+
+
+def create_retriever(
+    *,
+    with_seed_selector=True,
+):
+
+    dense = FakeDenseRetriever()
+
+    seed = (
+        FakeSeedSelector()
+        if with_seed_selector
+        else None
+    )
+
+    dependency = (
+        FakeDependencyResolver()
+    )
+
+    graph = (
+        FakeGraphRetriever()
+    )
+
+    fusion = FakeFusion()
+
+    context = FakeContextBuilder()
 
 
     retriever = Retriever(
 
-        query_encoder=
-        FakeQueryEncoder(),
+        dense_retriever=
+            dense,
 
-        vector_store=
-        FakeVectorStore(),
+        dependency_resolver=
+            dependency,
 
-        metadata_index=
-        FakeMetadataIndex(),
+        graph_retriever=
+            graph,
 
+        fusion=
+            fusion,
+
+        context_builder=
+            context,
+
+        seed_selector=
+            seed,
     )
 
 
-    context = retriever.retrieve(
+    return (
 
+        retriever,
+
+        dense,
+
+        seed,
+
+        dependency,
+
+        graph,
+
+        fusion,
+
+        context,
+    )
+
+
+# ============================================================
+# TESTS
+# ============================================================
+
+
+def test_retriever_returns_retrieved_context():
+
+    (
+        retriever,
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
+    ) = create_retriever()
+
+
+    result = retriever.retrieve(
         "show revenue"
-
     )
 
 
     assert isinstance(
-        context,
+        result,
         RetrievedContext,
     )
 
 
-
-    assert context.question == (
+    assert (
+        result.question
+        ==
         "show revenue"
     )
 
 
+def test_dense_retrieval_receives_question_and_limit():
 
-def test_metric_is_added_to_context():
+    (
+        retriever,
+        dense,
+        _,
+        _,
+        _,
+        _,
+        _,
+    ) = create_retriever()
 
 
-    retriever = Retriever(
+    retriever.retrieve(
 
-        FakeQueryEncoder(),
+        "show revenue",
 
-        FakeVectorStore(),
-
-        FakeMetadataIndex(),
-
+        limit=7,
     )
-
-
-    context = retriever.retrieve(
-        "show revenue"
-    )
-
-
-    assert len(
-        context.metrics
-    ) == 1
 
 
     assert (
-        context.metrics[0].name
+        dense.question
         ==
-        "revenue"
-    )
-
-
-
-def test_table_is_added_to_context():
-
-
-    retriever = Retriever(
-
-        FakeQueryEncoder(),
-
-        FakeVectorStore(),
-
-        FakeMetadataIndex(),
-
-    )
-
-
-    context = retriever.retrieve(
         "show revenue"
     )
 
 
-    assert len(
-        context.tables
-    ) == 1
-
-
     assert (
-        context.tables[0].name
+        dense.limit
         ==
-        "fact_sales"
+        7
     )
 
 
+def test_seed_selector_receives_dense_candidates():
 
-def test_trace_is_created():
-
-
-    retriever = Retriever(
-
-        FakeQueryEncoder(),
-
-        FakeVectorStore(),
-
-        FakeMetadataIndex(),
-
-    )
+    (
+        retriever,
+        _,
+        seed,
+        dependency,
+        _,
+        _,
+        _,
+    ) = create_retriever()
 
 
-    context = retriever.retrieve(
+    retriever.retrieve(
         "show revenue"
     )
 
 
-    assert len(
-        context.trace
-    ) == 2
+    assert (
+        seed.question
+        ==
+        "show revenue"
+    )
 
 
     assert (
-        context.trace[0].score
+        len(seed.received)
         ==
-        0.95
+        2
     )
+
+
+    assert (
+        seed.received[0]
+        .object_id
+        ==
+        "metric_revenue"
+    )
+
+
+    # Dependency resolution must receive
+    # the PRUNED seed set, not all dense
+    # candidates.
+
+    assert (
+        len(dependency.received)
+        ==
+        1
+    )
+
+
+    assert (
+        dependency.received[0]
+        .object_id
+        ==
+        "metric_revenue"
+    )
+
+
+def test_dependency_output_is_sent_to_graph_retriever():
+
+    (
+        retriever,
+        _,
+        _,
+        _,
+        graph,
+        _,
+        _,
+    ) = create_retriever()
+
+
+    retriever.retrieve(
+        "show revenue"
+    )
+
+
+    ids = {
+
+        item.object_id
+
+        for item
+        in graph.received
+
+    }
+
+
+    assert (
+        "metric_revenue"
+        in ids
+    )
+
+
+    assert (
+        "table_warehouse.fact_sales"
+        in ids
+    )
+
+
+def test_fusion_receives_three_candidate_sources():
+
+    (
+        retriever,
+        _,
+        _,
+        _,
+        _,
+        fusion,
+        _,
+    ) = create_retriever()
+
+
+    retriever.retrieve(
+        "show revenue"
+    )
+
+
+    assert (
+        len(fusion.received)
+        ==
+        3
+    )
+
+
+    seed_candidates = (
+        fusion.received[0]
+    )
+
+    dependency_candidates = (
+        fusion.received[1]
+    )
+
+    graph_candidates = (
+        fusion.received[2]
+    )
+
+
+    assert (
+        len(seed_candidates)
+        ==
+        1
+    )
+
+
+    assert (
+        len(dependency_candidates)
+        ==
+        2
+    )
+
+
+    assert (
+        graph_candidates
+        ==
+        []
+    )
+
+
+def test_context_builder_receives_fused_candidates():
+
+    (
+        retriever,
+        _,
+        _,
+        _,
+        _,
+        _,
+        context,
+    ) = create_retriever()
+
+
+    retriever.retrieve(
+        "show revenue"
+    )
+
+
+    assert (
+        context.question
+        ==
+        "show revenue"
+    )
+
+
+    ids = {
+
+        item.object_id
+
+        for item
+        in context.received
+
+    }
+
+
+    assert (
+        "metric_revenue"
+        in ids
+    )
+
+
+    assert (
+        "table_warehouse.fact_sales"
+        in ids
+    )
+
+
+def test_retriever_can_run_without_seed_selector():
+
+    (
+        retriever,
+        _,
+        _,
+        dependency,
+        _,
+        _,
+        _,
+    ) = create_retriever(
+        with_seed_selector=False
+    )
+
+
+    retriever.retrieve(
+        "some question"
+    )
+
+
+    # Without SeedSelector the retriever
+    # falls back to the complete dense set.
+
+    ids = {
+
+        item.object_id
+
+        for item
+        in dependency.received
+
+    }
+
+
+    assert ids == {
+
+        "metric_revenue",
+
+        "metric_profit",
+
+    }

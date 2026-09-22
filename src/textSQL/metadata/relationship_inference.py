@@ -314,59 +314,94 @@ def infer_relationships(
     relationships = []
 
 
+    # --------------------------------------------------
     # Step 1:
-    # Detect many-to-many relationships first
+    # Detect semantic many-to-many relationships.
+    #
+    # These describe business/schema meaning:
+    #
+    # customers
+    #     ↕
+    # campaigns
+    #
+    # through:
+    # customer_campaigns
+    #
+    # They are NOT a replacement for the underlying
+    # physical foreign-key relationships.
+    # --------------------------------------------------
 
-    junction_tables = detect_junction_tables(
-        tables
+    junction_tables = (
+        detect_junction_tables(
+            tables
+        )
     )
 
 
     for junction in junction_tables:
 
         relationships.extend(
+
             infer_many_to_many(
                 junction
             )
+
         )
 
 
+    # --------------------------------------------------
     # Step 2:
-    # Infer direct FK relationships
-
-    junction_names = {
-        table.qualified_name
-        for table in junction_tables
-    }
-
+    # Preserve ALL physical foreign-key relationships.
+    #
+    # Junction tables must NOT be skipped.
+    #
+    # Example:
+    #
+    # customer_campaigns.customer_id
+    #     -> customers.customer_id
+    #
+    # customer_campaigns.campaign_id
+    #     -> campaigns.campaign_id
+    #
+    # These physical edges are what SQL generation
+    # actually needs.
+    # --------------------------------------------------
 
     for table in tables:
 
-        # Skip junction tables
-        # because their meaning was already captured
-        if table.qualified_name in junction_names:
-            continue
+        for relationship in (
+            table.relationships
+        ):
 
+            same_table = (
 
-        for relationship in table.relationships:
-
-
-            if (
                 relationship.source_table
                 ==
                 relationship.target_table
-            ):
 
-                inferred = infer_self_relationship(
-                    relationship
+                and
+
+                relationship.source_schema
+                ==
+                relationship.target_schema
+            )
+
+
+            if same_table:
+
+                inferred = (
+                    infer_self_relationship(
+                        relationship
+                    )
                 )
-
 
             else:
 
-                inferred = infer_direct_relationship(
-                    table,
-                    relationship
+                inferred = (
+                    infer_direct_relationship(
+                        table,
+                        relationship,
+                    )
                 )
 
 

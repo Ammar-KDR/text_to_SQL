@@ -36,6 +36,40 @@ class SchemaGraph:
         relationship: RelationshipMetadata,
     ):
 
+
+            # --------------------------------------------------
+            # Synthetic many-to-many relationships describe
+            # semantic connectivity but are not physical SQL
+            # join edges.
+            #
+            # Example:
+            #
+            # customers <-> campaigns
+            #
+            # actually requires:
+            #
+            # customers
+            #     <- customer_campaigns
+            #     -> campaigns
+            #
+            # Keeping the synthetic edge out of the join graph
+            # prevents SQL generation from skipping the
+            # junction table.
+            # --------------------------------------------------
+
+        if (
+            relationship.relationship_type
+            ==
+            "many-to-many"
+
+            and
+
+            relationship.through_table
+            is not None
+        ):
+
+            return
+        
         source = (
             relationship
             .source_qualified_name

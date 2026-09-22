@@ -151,9 +151,53 @@ def test_tables_are_indexed():
     )
 
 
-    assert "customers" in index.tables
+    # Canonical table identities are
+    # schema-qualified.
 
-    assert "orders" in index.tables
+    assert (
+        "public.customers"
+        in index.tables
+    )
+
+    assert (
+        "public.orders"
+        in index.tables
+    )
+
+
+    # Bare table names remain usable
+    # through get_table() only when
+    # they resolve unambiguously.
+
+    customers = (
+        index.get_table(
+            "customers"
+        )
+    )
+
+    orders = (
+        index.get_table(
+            "orders"
+        )
+    )
+
+
+    assert customers is not None
+
+    assert orders is not None
+
+
+    assert (
+        customers.qualified_name
+        ==
+        "public.customers"
+    )
+
+    assert (
+        orders.qualified_name
+        ==
+        "public.orders"
+    )
 
 
 

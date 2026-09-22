@@ -21,7 +21,7 @@ def infer_cardinality(
         (
             table
             for table in tables
-            if table.name == relationship.source_table and table.schema_name == relationship.source_table
+            if table.name == relationship.source_table and table.schema_name == relationship.source_schema
         ),
         None,
     )
