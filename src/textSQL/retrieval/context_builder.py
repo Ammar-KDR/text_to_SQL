@@ -33,6 +33,7 @@ class ContextBuilder:
         self,
         question: str,
         candidates: list[FusedCandidate],
+        temporal_constraints=None,
     ) -> RetrievedContext:
 
         tables = []
@@ -42,7 +43,9 @@ class ContextBuilder:
         relationships = []
 
         trace = []
+        if temporal_constraints is None:
 
+            temporal_constraints = []
 
         for candidate in candidates:
 
@@ -156,6 +159,10 @@ class ContextBuilder:
             join_paths=join_paths,
 
             trace=trace,
+
+            temporal_constraints=(
+                temporal_constraints
+            ),
 
         )
 

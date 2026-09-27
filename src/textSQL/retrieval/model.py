@@ -40,7 +40,19 @@ class JoinPath(BaseModel):
         default_factory=list
     )
 
+class TemporalConstraint(BaseModel):
 
+    phrase: str
+
+    column: str
+
+    start_expression: str
+
+    end_expression: str
+
+    start_inclusive: bool = True
+
+    end_inclusive: bool = False
 
 class RetrievedContext(BaseModel):
     """
@@ -75,6 +87,11 @@ class RetrievedContext(BaseModel):
     trace: list[RetrievalTrace] = Field(
         default_factory=list
     )
+    temporal_constraints: list[
+            TemporalConstraint
+        ] = Field(
+            default_factory=list
+        )
 
 class RetrievalCandidate(BaseModel):
 
@@ -89,7 +106,19 @@ class RetrievalCandidate(BaseModel):
     source: str
 
 
+class TemporalResolution(BaseModel):
 
+    candidates: list[
+        RetrievalCandidate
+    ] = Field(
+        default_factory=list
+    )
+
+    constraints: list[
+        TemporalConstraint
+    ] = Field(
+        default_factory=list
+    )
 
 
 

@@ -8,3 +8,4 @@ alembic
 pyyaml
 sentence-transformers
 qdrant-client
+openai

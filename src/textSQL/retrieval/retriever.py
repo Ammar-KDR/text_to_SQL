@@ -25,7 +25,9 @@ from textSQL.retrieval.model import (
 from textSQL.retrieval.seed_selector import (
     SeedSelector,
 )
-
+from textSQL.retrieval.temporal_resolver import (
+    TemporalDependencyResolver,
+)
 class Retriever:
 
 
@@ -37,6 +39,7 @@ class Retriever:
         fusion: Fusion,
         context_builder: ContextBuilder,
         seed_selector: SeedSelector | None=None,
+        temporal_resolver: (TemporalDependencyResolver| None) = None,
     ):
 
         self.dense_retriever = (
@@ -60,7 +63,9 @@ class Retriever:
         self.seed_selector = (
             seed_selector
         )
-
+        self.temporal_resolver = (
+            temporal_resolver
+        )
 
 
     def retrieve(
@@ -100,12 +105,44 @@ class Retriever:
                 seed_candidates
             )
         )
+        if (
+            self.temporal_resolver
+            is not None
+        ):
+
+            temporal_resolution = (
+                self.temporal_resolver
+                .resolve(
+                    question,
+                    dependency_candidates,
+                )
+            )
+
+
+            resolved_candidates = (
+                temporal_resolution
+                .candidates
+            )
+
+
+            temporal_constraints = (
+                temporal_resolution
+                .constraints
+            )
+
+        else:
+
+            resolved_candidates = (
+                dependency_candidates
+            )
+
+            temporal_constraints = []
 
 
         graph_candidates = (
             self.graph_retriever
             .retrieve(
-                dependency_candidates
+                resolved_candidates
             )
         )
 
@@ -116,7 +153,7 @@ class Retriever:
 
                 seed_candidates,
 
-                dependency_candidates,
+                resolved_candidates,
 
                 graph_candidates,
 
@@ -131,6 +168,9 @@ class Retriever:
                 question,
 
                 fused_candidates,
+        temporal_constraints=(
+            temporal_constraints
+        ),
 
             )
         )

@@ -19,6 +19,10 @@ class ColumnMetadata(BaseModel):
 
     business_meaning: str | None = None
 
+    allowed_values: list[str] = Field(
+        default_factory=list
+    )
+
 class JoinConditionMetadata(BaseModel):
 
     source_schema: str | None = None

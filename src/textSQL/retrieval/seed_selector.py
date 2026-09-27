@@ -51,53 +51,136 @@ class SeedSelector:
             self._tokens(question)
         )
 
-
         selected = {}
 
 
         # ----------------------------------------------------
-        # 1. Explicit dense matches
+        # 1. Explicit metric matches from dense retrieval
         # ----------------------------------------------------
+
+        dense_metric_specificities = {}
+
 
         for candidate in candidates:
 
-            if self._explicit_match(
-                question,
-                candidate,
-            ):
-
-                selected[
+            obj = (
+                self.metadata_index
+                .get_object(
                     candidate.object_id
-                ] = candidate
-
-
-        # ----------------------------------------------------
-        # 2. If explicit intent exists,
-        #    trust it over semantic top-1.
-        # ----------------------------------------------------
-
-        if selected:
-
-            table_candidates = (
-                self._find_explicit_tables(
-
-                    question_tokens,
-
-                    candidates,
-
-                    list(
-                        selected.values()
-                    ),
                 )
             )
 
 
-            for candidate in table_candidates:
+            if not isinstance(
+                obj,
+                MetricMetadata,
+            ):
+                continue
+
+
+            # Preserve the original strict
+            # explicit phrase matching for
+            # dense retrieval results.
+            if not self._explicit_match(
+                question,
+                candidate,
+            ):
+                continue
+
+
+            selected[
+                candidate.object_id
+            ] = candidate
+
+
+            # Specificity is only used for
+            # comparison against catalog matches.
+            specificity = (
+                self._metric_match_specificity(
+                    question,
+                    obj,
+                )
+            )
+
+
+            dense_metric_specificities[
+                candidate.object_id
+            ] = specificity
+
+
+        dense_best_specificity = max(
+                    dense_metric_specificities.values(),
+                    default=0,
+                )
+
+
+        # ----------------------------------------------------
+        # 2. Search full metric catalog
+        # ----------------------------------------------------
+
+        catalog_matches = (
+            self._catalog_metric_matches(
+                question
+            )
+        )
+
+
+        catalog_best_specificity = max(
+            (
+                specificity
+                for _, specificity
+                in catalog_matches
+            ),
+            default=0,
+        )
+
+
+        if (
+            catalog_best_specificity
+            >
+            dense_best_specificity
+        ):
+
+            for (
+                candidate,
+                specificity,
+            ) in catalog_matches:
+
+                if (
+                    specificity
+                    !=
+                    catalog_best_specificity
+                ):
+                    continue
 
                 selected[
                     candidate.object_id
                 ] = candidate
 
+
+        # ----------------------------------------------------
+        # 3. Resolve explicit tables AFTER metrics
+        # ----------------------------------------------------
+
+        table_candidates = (
+            self._find_explicit_tables(
+                question_tokens,
+                candidates,
+                list(
+                    selected.values()
+                ),
+            )
+        )
+
+
+        for candidate in table_candidates:
+
+            selected[
+                candidate.object_id
+            ] = candidate
+
+
+        if selected:
 
             return list(
                 selected.values()
@@ -906,3 +989,121 @@ class SeedSelector:
 
 
         return normalized
+    def _catalog_metric_matches(
+        self,
+        question: str,
+    ) -> list[
+        tuple[
+            RetrievalCandidate,
+            int,
+        ]
+    ]:
+
+        matches = []
+
+
+        for metric in (
+            self.metadata_index
+            .metrics
+            .values()
+        ):
+
+            specificity = (
+                self._metric_match_specificity(
+                    question,
+                    metric,
+                )
+            )
+
+
+            if specificity <= 0:
+                continue
+
+
+            matches.append(
+
+                (
+
+                    RetrievalCandidate(
+
+                        object_id=(
+                            f"metric_{metric.name}"
+                        ),
+
+                        object_type="metric",
+
+                        object_name=(
+                            metric.name
+                        ),
+
+                        score=1.0,
+
+                        source=(
+                            "catalog_explicit"
+                        ),
+                    ),
+
+                    specificity,
+
+                )
+            )
+
+
+        return matches
+
+
+    def _metric_match_specificity(
+        self,
+        question: str,
+        metric: MetricMetadata,
+    ) -> int:
+
+        question_tokens = (
+            self._tokens(
+                question
+            )
+        )
+
+
+        phrases = [
+
+            metric.name,
+
+            *metric.synonyms,
+
+        ]
+
+
+        best_specificity = 0
+
+
+        for phrase in phrases:
+
+            phrase_tokens = (
+                self._tokens(
+                    phrase
+                )
+            )
+
+
+            if not phrase_tokens:
+                continue
+
+
+            if not phrase_tokens.issubset(
+                question_tokens
+            ):
+                continue
+
+
+            best_specificity = max(
+
+                best_specificity,
+
+                len(
+                    phrase_tokens
+                ),
+            )
+
+
+        return best_specificity

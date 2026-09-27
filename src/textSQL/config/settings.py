@@ -11,6 +11,12 @@ class Settings(BaseSettings):
 
     llm_base_url: str = ""
 
+    llm_api_key: str = "lm-studio"
+
+    llm_temperature: float = 0.0
+
+    llm_max_tokens: int = 1200
+
     embedding_provider: str = ""
 
     model_config = SettingsConfigDict(

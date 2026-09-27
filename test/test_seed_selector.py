@@ -369,3 +369,121 @@ def test_near_tie_is_preserved():
         "metric_profit",
 
     }
+
+def test_catalog_metric_can_rescue_more_specific_intent():
+
+    selector = SeedSelector(
+        create_index()
+    )
+
+
+    results = selector.select(
+
+        "what was revenue by campaign last quarter?",
+
+        [
+
+            # campaign_revenue is deliberately
+            # absent from dense retrieval.
+
+            candidate(
+                "revenue",
+                0.7200,
+            ),
+
+            candidate(
+                "profit",
+                0.6800,
+            ),
+
+            candidate(
+                "customer_lifetime_value",
+                0.6700,
+            ),
+
+        ],
+    )
+
+
+    ids = {
+
+        result.object_id
+
+        for result
+        in results
+
+    }
+
+
+    assert (
+        "metric_campaign_revenue"
+        in ids
+    )
+
+
+    # Revenue was also an explicit dense
+    # match, so keeping it is fine.
+    assert (
+        "metric_revenue"
+        in ids
+    )
+def test_catalog_matching_does_not_expand_equal_specificity():
+
+    selector = SeedSelector(
+        create_index()
+    )
+
+
+    results = selector.select(
+
+        "what were the top 10 products by revenue?",
+
+        [
+
+            candidate(
+                "top_products",
+                0.7239,
+            ),
+
+            candidate(
+                "revenue",
+                0.6876,
+            ),
+
+            candidate(
+                "product_revenue",
+                0.6850,
+            ),
+
+        ],
+    )
+
+
+    ids = {
+
+        result.object_id
+
+        for result
+        in results
+
+    }
+
+
+    assert (
+        "metric_top_products"
+        in ids
+    )
+
+    assert (
+        "metric_revenue"
+        in ids
+    )
+
+
+    # Preserve the current selector policy:
+    # an equally-specific catalog concept does
+    # not expand an already explicit selection.
+    assert (
+        "metric_product_revenue"
+        not in ids
+    )

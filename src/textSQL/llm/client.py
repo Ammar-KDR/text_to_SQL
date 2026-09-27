@@ -1,21 +1,35 @@
 from abc import ABC, abstractmethod
 
+from pydantic import BaseModel
+
 
 class LLMClient(ABC):
     """
-    Abstract interface for all LLM providers.
+    Provider-independent interface for LLM generation.
     """
 
     @abstractmethod
-    def generate(self, prompt: str) -> str:
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: type[BaseModel] | None = None,
+    ) -> str:
         """
-        Generate a response from the language model.
+        Generate a model response.
 
         Args:
-            prompt:
-                Input prompt.
+            system_prompt:
+                Stable model instructions.
+
+            user_prompt:
+                Request-specific content.
+
+            response_schema:
+                Optional Pydantic model describing
+                the required structured output.
 
         Returns:
-            Generated text.
+            Raw generated response text.
         """
         pass
