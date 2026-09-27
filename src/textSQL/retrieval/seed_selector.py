@@ -200,39 +200,95 @@ class SeedSelector:
         ] = top
 
 
-        ranked_count = 1
+        if (
+            self.max_ranked_seeds
+            <= 1
+        ):
 
-
-        for candidate in candidates[1:]:
-
-            if (
-                ranked_count
-                >=
-                self.max_ranked_seeds
-            ):
-                break
-
-
-            score_gap = (
-                top.score
-                -
-                candidate.score
+            return list(
+                selected.values()
             )
 
 
-            if (
-                score_gap
-                >
-                self.max_score_gap
-            ):
-                continue
+        eligible_candidates = [
 
+            candidate
+
+            for candidate
+            in candidates[1:]
+
+            if (
+                top.score
+                -
+                candidate.score
+                <=
+                self.max_score_gap
+            )
+        ]
+
+
+        # ----------------------------------------------------
+        # Prefer semantic diversity.
+        #
+        # When metric and table evidence are nearly tied,
+        # preserve both kinds of evidence instead of using
+        # every seed slot on one object type.
+        #
+        # Example:
+        #
+        # top_products      metric  0.6376
+        # active_customers  metric  0.6354
+        # customer_events   table   0.6331
+        #
+        # We prefer:
+        #
+        # top_products + customer_events
+        #
+        # rather than:
+        #
+        # top_products + active_customers
+        # ----------------------------------------------------
+
+        different_type = next(
+
+            (
+
+                candidate
+
+                for candidate
+                in eligible_candidates
+
+                if (
+                    candidate.object_type
+                    !=
+                    top.object_type
+                )
+
+            ),
+
+            None,
+        )
+
+
+        if different_type is not None:
 
             selected[
-                candidate.object_id
-            ] = candidate
+                different_type.object_id
+            ] = different_type
 
-            ranked_count += 1
+
+        else:
+
+            # No diverse evidence is close enough.
+            # Preserve the original near-tie behavior.
+
+            for candidate in eligible_candidates:
+
+                selected[
+                    candidate.object_id
+                ] = candidate
+
+                break
 
 
         return list(

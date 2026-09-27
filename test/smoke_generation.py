@@ -456,25 +456,25 @@ def print_generation_result(
 questions = [
 
     # Simple / table-level
-    # "How many customers are registered?",
+    "How many customers are registered?",
 
     # # Operational / OLTP
-    # "How many completed payments were attempted last month?",
+     "How many completed payments were attempted last month?",
 
     # # Analytical / OLAP
-    # "What were the top 10 products by revenue?",
+    "What were the top 10 products by revenue?",
 
     # Metric + dimension + date
     "What was revenue by campaign last quarter?",
 
     # # Materially ambiguous
-    # "Who are our best customers?",
+    "Who are our best customers?",
 
-    # # Known schema limitation
-    # (
-    #     "Which exact product was viewed "
-    #     "most often by customers?"
-    # ),
+    # Known schema limitation
+    (
+        "Which exact product was viewed "
+        "most often by customers?"
+    ),
 ]
 
 

@@ -33,6 +33,14 @@ RULES:
 4. Metric definitions, authoritative sources, business rules,
    and forbidden sources in the database context must be
    respected.
+   When a supplied metric formula or business rule specifies an
+authoritative grouping key, preserve that grouping key in the SQL.
+
+Human-readable attributes such as names may be selected for display,
+but they must not replace an explicitly required grouping key.
+
+For example, if a metric requires grouping by product_key and
+product_name is displayed, group by both product_key and product_name.
 
 5. Generate PostgreSQL syntax only.
 

@@ -376,13 +376,7 @@ def print_context(
 
 questions = [
 
-    "show revenue",
-
-    "show revenue by customer",
-
-    "show completed payments",
-
-    "what were the top 10 products by revenue?",
+    "Which exact product was viewed most often by customers?",
 
 ]
 

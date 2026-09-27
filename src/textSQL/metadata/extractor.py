@@ -138,63 +138,143 @@ def extract_schemas(
 def extract_tables(
     inspector,
     schema_name,
-    config
+    config,
 ) -> list[TableMetadata]:
+
+    schema_config = (
+        config
+        .get(
+            "schemas",
+            {},
+        )
+        .get(
+            schema_name,
+            {},
+        )
+    )
+
+
+    configured_tables = (
+        schema_config.get(
+            "tables",
+            {},
+        )
+    )
 
 
     tables = []
+
 
     table_names = (
         inspector.get_table_names(
             schema=schema_name
         )
     )
+
+
     excluded_tables = config.get(
-    "excluded_tables",
-    []
-)
+        "excluded_tables",
+        [],
+    )
 
 
-    
+    configured_table_names = set(
+        configured_tables.keys()
+    )
+
+
+    actual_table_names = set(
+        table_names
+    )
+
+
+    unknown_tables = (
+        configured_table_names
+        -
+        actual_table_names
+    )
+
+
+    if unknown_tables:
+
+        raise ValueError(
+            f"Metadata configuration for "
+            f"schema '{schema_name}' "
+            f"references unknown tables: "
+            f"{sorted(unknown_tables)}"
+        )
 
 
     for table_name in table_names:
 
-        if table_name in excluded_tables:
-                continue
+        if (
+            table_name
+            in excluded_tables
+        ):
+            continue
+
+
         columns = extract_columns(
             inspector,
             table_name,
             schema_name,
-            
         )
 
 
-        relationships = extract_relationships(
-            inspector,
-            table_name,
-            schema_name,
-            
-        )
-
-        primary_keys=[
-    column.name
-    for column in columns
-    if column.is_primary_key
-]
-        tables.append(
-            TableMetadata(
-                name=table_name,
-                schema_name=schema_name,
-                columns=columns,
-                relationships=relationships,
-                primary_keys=primary_keys
+        relationships = (
+            extract_relationships(
+                inspector,
+                table_name,
+                schema_name,
             )
         )
 
 
-    return tables
+        primary_keys = [
 
+            column.name
+
+            for column
+            in columns
+
+            if column.is_primary_key
+        ]
+
+
+        table = TableMetadata(
+
+            name=table_name,
+
+            schema_name=schema_name,
+
+            columns=columns,
+
+            relationships=relationships,
+
+            primary_keys=primary_keys,
+        )
+
+
+        table_config = (
+            configured_tables.get(
+                table_name,
+                {},
+            )
+        )
+
+
+        table = enrich_table_metadata(
+            table,
+            table_config,
+        )
+
+
+        tables.append(
+            table
+        )
+
+
+    return tables
 
 def extract_columns(
     inspector,
@@ -523,3 +603,106 @@ def validate_metrics_against_schema(
                 f"unknown authoritative source "
                 f"'{metric.authoritative_source}'"
             )
+
+def enrich_table_metadata(
+    table: TableMetadata,
+    table_config: dict,
+) -> TableMetadata:
+
+    column_configs = (
+        table_config.get(
+            "columns",
+            {},
+        )
+    )
+
+
+    known_columns = {
+
+        column.name
+
+        for column
+        in table.columns
+    }
+
+
+    unknown_columns = (
+        set(
+            column_configs.keys()
+        )
+        -
+        known_columns
+    )
+
+
+    if unknown_columns:
+
+        raise ValueError(
+            f"Metadata configuration for "
+            f"'{table.qualified_name}' "
+            f"references unknown columns: "
+            f"{sorted(unknown_columns)}"
+        )
+
+
+    enriched_columns = []
+
+
+    for column in table.columns:
+
+        column_config = (
+            column_configs.get(
+                column.name,
+                {},
+            )
+        )
+
+
+        enriched_columns.append(
+
+            column.model_copy(
+
+                update={
+
+                    "description":
+                        column_config.get(
+                            "description",
+                            column.description,
+                        ),
+
+                    "business_meaning":
+                        column_config.get(
+                            "business_meaning",
+                            column.business_meaning,
+                        ),
+
+                    "allowed_values":
+                        column_config.get(
+                            "allowed_values",
+                            column.allowed_values,
+                        ),
+                }
+            )
+        )
+
+
+    return table.model_copy(
+
+        update={
+
+            "description":
+                table_config.get(
+                    "description",
+                    table.description,
+                ),
+
+            "business_role":
+                table_config.get(
+                    "business_role",
+                    table.business_role,
+                ),
+
+            "columns":
+                enriched_columns,
+        }
+    )

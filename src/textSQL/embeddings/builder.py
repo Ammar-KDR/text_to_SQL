@@ -162,33 +162,78 @@ Business Rules:
 
 
     def _table_text(
-        self,
-        table: TableMetadata,
-    ) -> str:
+    self,
+    table: TableMetadata,
+) -> str:
 
+        columns = "\n".join(
 
-        columns = ", ".join(
-            [
-                column.name
-                for column in table.columns
-            ]
+            self._column_text(
+                column
+            )
+
+            for column
+            in table.columns
         )
 
 
         return f"""
-Table:
-{table.qualified_name}
+    Table:
+    {table.qualified_name}
 
-Description:
-{table.description}
+    Description:
+    {table.description or ""}
 
-Business Role:
-{table.business_role}
+    Business Role:
+    {table.business_role or ""}
 
-Columns:
-{columns}
-""".strip()
+    Columns:
+    {columns}
+    """.strip()
 
+    def _column_text(
+    self,
+    column,
+) -> str:
+
+        parts = [
+
+            f"Column: {column.name}",
+
+            f"Type: {column.data_type}",
+        ]
+
+
+        if column.description:
+
+            parts.append(
+                f"Description: "
+                f"{column.description}"
+            )
+
+
+        if column.business_meaning:
+
+            parts.append(
+                f"Business Meaning: "
+                f"{column.business_meaning}"
+            )
+
+
+        if column.allowed_values:
+
+            parts.append(
+                "Allowed Values: "
+                +
+                ", ".join(
+                    column.allowed_values
+                )
+            )
+
+
+        return " | ".join(
+            parts
+        )
 
     def _build_relationship_documents(
     self,

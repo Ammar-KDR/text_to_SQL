@@ -5,15 +5,202 @@ excluded_schemas:
 
 schemas:
 
+  # ==========================================================
+  # OPERATIONAL / OLTP SCHEMA
+  # ==========================================================
+
   public:
     type: operational
-    description: "Application transactional database"
 
+    description: >
+      Application transactional database containing operational
+      customer, payment, commerce, marketing, inventory, shipping,
+      review, and security data.
+
+    tables:
+
+      # ======================================================
+      # CUSTOMERS
+      # ======================================================
+
+      customers:
+        description: >
+          Customer profiles including both registered account-linked
+          customers and guest customers.
+
+        business_role: >
+          Stores customer identity and profile information. A customer
+          may either be linked to a registered user account or represent
+          a guest customer.
+
+        columns:
+
+          user_id:
+            description: >
+              Optional link from a customer profile to a registered
+              application user account.
+
+            business_meaning: >
+              A non-null user_id means the customer is linked to a
+              registered user account. A null user_id represents a
+              guest customer. Questions asking for registered customers
+              must use user_id IS NOT NULL.
+
+          registered_at:
+            description: >
+              Timestamp when the customer profile was created.
+
+            business_meaning: >
+              This timestamp exists for both registered and guest
+              customer profiles. It must not be used by itself to
+              distinguish registered customers from guests.
+
+          customer_status:
+            description: >
+              Current business status of the customer profile.
+
+            business_meaning: >
+              Describes whether the customer is currently active,
+              inactive, or blocked. This status is independent from
+              whether the customer is registered to a user account.
+
+            allowed_values:
+              - active
+              - inactive
+              - blocked
+
+
+      # ======================================================
+      # PAYMENTS
+      # ======================================================
+
+      payments:
+        description: >
+          Individual payment attempts associated with customer orders.
+
+        business_role: >
+          Operational source for payment attempts, their processing
+          status, attempt time, successful completion time, monetary
+          amount, and transaction reference.
+
+        columns:
+
+          payment_status:
+            description: >
+              Current processing outcome of a payment attempt.
+
+            business_meaning: >
+              A payment attempt is successful when payment_status is
+              'completed'. Pending and failed attempts are not completed.
+
+            allowed_values:
+              - pending
+              - completed
+              - failed
+
+          attempted_at:
+            description: >
+              Timestamp when the payment attempt was initiated.
+
+            business_meaning: >
+              Use this column when a question refers to when a payment
+              was attempted.
+
+          completed_at:
+            description: >
+              Timestamp when a successful payment attempt completed.
+
+            business_meaning: >
+              Completed payments have a completion timestamp in the
+              seeded transactional dataset. Failed and pending payment
+              attempts do not have a successful completion timestamp.
+
+          amount:
+            description: >
+              Monetary amount associated with the payment attempt.
+
+            business_meaning: >
+              Represents the amount attempted through the payment
+              transaction. It must not be treated as the authoritative
+              analytical revenue metric.
+
+          transaction_reference:
+            description: >
+              External or generated transaction reference associated
+              with a successfully completed payment.
+
+            business_meaning: >
+              Successful payment attempts receive a transaction
+              reference in the seeded dataset, while unsuccessful
+              attempts may not have one.
+
+
+      # ======================================================
+      # CUSTOMER BEHAVIOR EVENTS
+      # ======================================================
+
+      customer_events:
+        description: >
+          Customer behavioral activity events recorded while customers
+          interact with the commerce platform.
+
+        business_role: >
+          Records customer-level behavioral events such as product views,
+          searches, cart actions, wishlist actions, and checkout starts.
+          The table identifies the customer and event type but does not
+          identify which specific product was involved in an event.
+
+        columns:
+
+          customer_id:
+            description: >
+              Customer associated with the behavioral event.
+
+            business_meaning: >
+              Links the recorded behavioral event to a customer profile.
+
+          event_type:
+            description: >
+              Type of customer behavior event.
+
+            business_meaning: >
+              Describes the kind of customer interaction that occurred.
+              A product_view indicates that a customer viewed a product,
+              but customer_events contains no product identifier and
+              therefore cannot determine which exact product was viewed.
+
+            allowed_values:
+              - product_view
+              - search
+              - add_to_cart
+              - remove_from_cart
+              - wishlist
+              - checkout_started
+
+          timestamp:
+            description: >
+              Timestamp when the customer behavior event occurred.
+
+            business_meaning: >
+              Use this column when a question asks when customer
+              behavioral activity occurred.
+
+
+  # ==========================================================
+  # ANALYTICAL / OLAP SCHEMA
+  # ==========================================================
 
   warehouse:
     type: analytical
-    description: "Historical analytical warehouse"
+
+    description: >
+      Historical analytical warehouse containing dimensions and fact
+      tables used for business reporting and analytical metrics.
+
+
+# ============================================================
+# GLOBAL TABLE EXCLUSIONS
+# ============================================================
 
 excluded_tables:
-
   - alembic_version

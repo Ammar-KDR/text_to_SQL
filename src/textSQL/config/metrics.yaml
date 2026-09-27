@@ -512,10 +512,10 @@ metrics:
       - marketing revenue
 
     description: >
-      Net merchandise revenue attributed to marketing campaigns.
+      Net merchandise revenue attributed to individual marketing campaigns.
 
     formula: >
-      SUM(fact_sales.revenue)
+      SUM(fact_sales.revenue) GROUP BY fact_sales.campaign_key
 
     authoritative_source: fact_sales
 
@@ -533,6 +533,8 @@ metrics:
 
     business_rules:
       - Campaign attribution comes from the campaign key populated through explicit conversion attribution
+      - Campaign-level revenue must group sales by campaign
+      - Use dim_campaign.campaign_name when a human-readable campaign identifier is required
       - Do not infer campaign attribution from matching dates
 
     forbidden_sources: []
