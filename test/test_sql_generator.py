@@ -36,7 +36,18 @@ from textSQL.retrieval.model import (
     RetrievalTrace,
 )
 
+from textSQL.generation.models import (
+    GenerationContext,
+    GenerationStatus,
+    SQLGenerationResult,
+)
 
+from textSQL.validation.models import (
+    SQLValidationResult,
+    SQLValidationStatus,
+    ValidationIssue,
+    ValidationIssueCode,
+)
 # ============================================================
 # FAKE LLM CLIENT
 # ============================================================
@@ -331,6 +342,91 @@ def build_generated_response():
     }
     """
 
+def build_repaired_response():
+
+    return """
+    {
+        "status": "generated",
+        "sql": "SELECT dc.customer_name, SUM(fs.revenue) AS revenue FROM warehouse.fact_sales AS fs JOIN warehouse.dim_customer AS dc ON fs.customer_key = dc.customer_key GROUP BY dc.customer_name;",
+        "explanation": "GENERATED: Corrected the query using the supplied customer relationship.",
+        "tables_used": [
+            "warehouse.fact_sales",
+            "warehouse.dim_customer"
+        ],
+        "columns_used": [
+            "warehouse.fact_sales.revenue",
+            "warehouse.fact_sales.customer_key",
+            "warehouse.dim_customer.customer_key",
+            "warehouse.dim_customer.customer_name"
+        ],
+        "assumptions": [],
+        "clarification_question": null,
+        "clarification_options": []
+    }
+    """
+
+
+def build_invalid_validation_result():
+
+    return SQLValidationResult(
+
+        status=(
+            SQLValidationStatus.INVALID
+        ),
+
+        issues=[
+
+            ValidationIssue(
+
+                code=(
+                    ValidationIssueCode
+                    .INVALID_JOIN
+                ),
+
+                message=(
+                    "JOIN condition does not "
+                    "match the retrieved "
+                    "relationship."
+                ),
+
+                object_name=(
+                    "fs.sales_key = "
+                    "dc.customer_key"
+                ),
+            )
+        ],
+    )
+
+def build_invalid_validation_result():
+
+    return SQLValidationResult(
+
+        status=(
+            SQLValidationStatus.INVALID
+        ),
+
+        issues=[
+
+            ValidationIssue(
+
+                code=(
+                    ValidationIssueCode
+                    .INVALID_JOIN
+                ),
+
+                message=(
+                    "JOIN condition does not "
+                    "match the retrieved "
+                    "relationship."
+                ),
+
+                object_name=(
+                    "fs.sales_key = "
+                    "dc.customer_key"
+                ),
+            )
+        ],
+    )
 
 # ============================================================
 # SUCCESSFUL GENERATION
@@ -1291,3 +1387,900 @@ def test_complete_generation_pipeline(
         not in call["user_prompt"]
     )
 
+
+def test_build_context_returns_generation_context(
+    retrieved_context,
+):
+
+    generator = SQLGenerator(
+        FakeLLMClient(
+            response=(
+                build_generated_response()
+            )
+        )
+    )
+
+
+    context = (
+        generator.build_context(
+            retrieved_context
+        )
+    )
+
+
+    assert isinstance(
+        context,
+        GenerationContext,
+    )
+
+
+    assert (
+        "warehouse.fact_sales"
+        in {
+            table.qualified_name
+            for table
+            in context.tables
+        }
+    )
+
+def test_generate_from_existing_context(
+    retrieved_context,
+):
+
+    llm = FakeLLMClient(
+        response=(
+            build_generated_response()
+        )
+    )
+
+
+    generator = SQLGenerator(
+        llm
+    )
+
+
+    context = (
+        generator.build_context(
+            retrieved_context
+        )
+    )
+
+
+    result = (
+        generator
+        .generate_from_context(
+
+            question=(
+                retrieved_context.question
+            ),
+
+            generation_context=(
+                context
+            ),
+        )
+    )
+
+
+    assert (
+        result.status
+        ==
+        GenerationStatus.GENERATED
+    )
+
+
+    assert (
+        result.sql
+        is not None
+    )
+
+
+    assert (
+        len(llm.calls)
+        ==
+        1
+    )
+
+from textSQL.generation.context_builder import (
+    GenerationContextBuilder,
+)
+def test_generate_from_context_does_not_rebuild_context(
+    retrieved_context,
+):
+
+    class FailingContextBuilder:
+
+        def build(
+            self,
+            retrieved_context,
+        ):
+
+            raise AssertionError(
+                "GenerationContext was rebuilt"
+            )
+
+
+    llm = FakeLLMClient(
+        response=(
+            build_generated_response()
+        )
+    )
+
+
+    generator = SQLGenerator(
+
+        llm_client=llm,
+
+        context_builder=(
+            FailingContextBuilder()
+        ),
+    )
+
+
+    existing_context = (
+        GenerationContextBuilder()
+        .build(
+            retrieved_context
+        )
+    )
+
+
+    result = (
+        generator
+        .generate_from_context(
+
+            question=(
+                retrieved_context.question
+            ),
+
+            generation_context=(
+                existing_context
+            ),
+        )
+    )
+
+
+    assert (
+        result.status
+        ==
+        GenerationStatus.GENERATED
+    )
+from textSQL.generation.context_formatter import (
+    ContextFormatter,
+)
+def test_generate_from_context_uses_exact_context_object(
+    retrieved_context,
+):
+
+    class CapturingFormatter:
+
+        def __init__(
+            self,
+        ):
+
+            self.received_context = None
+
+            self.real_formatter = (
+                ContextFormatter()
+            )
+
+
+        def format(
+            self,
+            context,
+        ):
+
+            self.received_context = (
+                context
+            )
+
+
+            return (
+                self.real_formatter
+                .format(
+                    context
+                )
+            )
+
+
+    formatter = (
+        CapturingFormatter()
+    )
+
+
+    llm = FakeLLMClient(
+        response=(
+            build_generated_response()
+        )
+    )
+
+
+    generator = SQLGenerator(
+
+        llm_client=llm,
+
+        context_formatter=(
+            formatter
+        ),
+    )
+
+
+    context = (
+        generator.build_context(
+            retrieved_context
+        )
+    )
+
+
+    generator.generate_from_context(
+
+        question=(
+            retrieved_context.question
+        ),
+
+        generation_context=(
+            context
+        ),
+    )
+
+
+    assert (
+        formatter.received_context
+        is
+        context
+    )
+def test_generate_builds_context_once(
+    retrieved_context,
+):
+
+    class CountingContextBuilder:
+
+        def __init__(
+            self,
+        ):
+
+            self.calls = 0
+
+            self.real_builder = (
+                GenerationContextBuilder()
+            )
+
+
+        def build(
+            self,
+            retrieved_context,
+        ):
+
+            self.calls += 1
+
+
+            return (
+                self.real_builder
+                .build(
+                    retrieved_context
+                )
+            )
+
+
+    builder = (
+        CountingContextBuilder()
+    )
+
+
+    generator = SQLGenerator(
+
+        llm_client=(
+            FakeLLMClient(
+                response=(
+                    build_generated_response()
+                )
+            )
+        ),
+
+        context_builder=builder,
+    )
+
+
+    generator.generate(
+        retrieved_context
+    )
+
+
+    assert (
+        builder.calls
+        ==
+        1
+    )
+
+
+def test_repair_from_context_returns_generated_result(
+    retrieved_context,
+):
+
+    llm = FakeLLMClient(
+        response=(
+            build_repaired_response()
+        )
+    )
+
+
+    generator = SQLGenerator(
+        llm_client=llm
+    )
+
+
+    context = (
+        generator.build_context(
+            retrieved_context
+        )
+    )
+
+
+    previous_result = (
+        SQLGenerationResult(
+
+            status=(
+                GenerationStatus.GENERATED
+            ),
+
+            sql=(
+                "SELECT dc.customer_name "
+                "FROM warehouse.fact_sales AS fs "
+                "JOIN warehouse.dim_customer AS dc "
+                "ON fs.sales_key = dc.customer_key"
+            ),
+
+            explanation=(
+                "GENERATED: Initial query."
+            ),
+
+            tables_used=[
+                "warehouse.fact_sales",
+                "warehouse.dim_customer",
+            ],
+
+            columns_used=[
+                (
+                    "warehouse.fact_sales."
+                    "sales_key"
+                ),
+                (
+                    "warehouse.dim_customer."
+                    "customer_key"
+                ),
+                (
+                    "warehouse.dim_customer."
+                    "customer_name"
+                ),
+            ],
+        )
+    )
+
+
+    repaired = (
+        generator
+        .repair_from_context(
+
+            question=(
+                retrieved_context.question
+            ),
+
+            generation_context=context,
+
+            previous_result=(
+                previous_result
+            ),
+
+            validation_result=(
+                build_invalid_validation_result()
+            ),
+        )
+    )
+
+
+    assert (
+        repaired.status
+        ==
+        GenerationStatus.GENERATED
+    )
+
+
+    assert (
+        "fs.customer_key = "
+        "dc.customer_key"
+        in repaired.sql
+    )
+
+
+    assert (
+        len(llm.calls)
+        ==
+        1
+    )
+
+def test_repair_prompt_contains_validation_feedback(
+    retrieved_context,
+):
+
+    llm = FakeLLMClient(
+        response=(
+            build_repaired_response()
+        )
+    )
+
+
+    generator = SQLGenerator(
+        llm
+    )
+
+
+    context = (
+        generator.build_context(
+            retrieved_context
+        )
+    )
+
+
+    previous_result = SQLGenerationResult(
+
+        status=(
+            GenerationStatus.GENERATED
+        ),
+
+        sql=(
+            "SELECT dc.customer_name "
+            "FROM warehouse.fact_sales AS fs "
+            "JOIN warehouse.dim_customer AS dc "
+            "ON fs.sales_key = dc.customer_key"
+        ),
+
+        explanation=(
+            "GENERATED: Initial query."
+        ),
+
+        tables_used=[
+            "warehouse.fact_sales",
+            "warehouse.dim_customer",
+        ],
+
+        columns_used=[
+            (
+                "warehouse.fact_sales."
+                "sales_key"
+            ),
+            (
+                "warehouse.dim_customer."
+                "customer_key"
+            ),
+            (
+                "warehouse.dim_customer."
+                "customer_name"
+            ),
+        ],
+    )
+
+
+    generator.repair_from_context(
+
+        question=(
+            retrieved_context.question
+        ),
+
+        generation_context=context,
+
+        previous_result=(
+            previous_result
+        ),
+
+        validation_result=(
+            build_invalid_validation_result()
+        ),
+    )
+
+
+    prompt = (
+        llm.calls[0]
+        ["user_prompt"]
+    )
+
+
+    assert (
+        "invalid_join"
+        in prompt
+    )
+
+
+    assert (
+        "fs.sales_key = "
+        "dc.customer_key"
+        in prompt
+    )
+
+
+    assert (
+        previous_result.sql
+        in prompt
+    )
+
+
+def test_repair_uses_exact_generation_context_object(
+    retrieved_context,
+):
+
+    class CapturingFormatter:
+
+        def __init__(
+            self,
+        ):
+
+            self.received_context = None
+
+
+        def format(
+            self,
+            context,
+        ):
+
+            self.received_context = (
+                context
+            )
+
+            return (
+                context.model_dump_json()
+            )
+
+
+    formatter = (
+        CapturingFormatter()
+    )
+
+
+    generator = SQLGenerator(
+
+        llm_client=(
+            FakeLLMClient(
+                response=(
+                    build_repaired_response()
+                )
+            )
+        ),
+
+        context_formatter=(
+            formatter
+        ),
+    )
+
+
+    context = (
+        GenerationContextBuilder()
+        .build(
+            retrieved_context
+        )
+    )
+
+
+    previous_result = SQLGenerationResult(
+
+        status=(
+            GenerationStatus.GENERATED
+        ),
+
+        sql=(
+            "SELECT dc.customer_name "
+            "FROM warehouse.fact_sales AS fs "
+            "JOIN warehouse.dim_customer AS dc "
+            "ON fs.sales_key = dc.customer_key"
+        ),
+
+        explanation=(
+            "GENERATED: Initial query."
+        ),
+
+        tables_used=[
+            "warehouse.fact_sales",
+            "warehouse.dim_customer",
+        ],
+
+        columns_used=[
+            (
+                "warehouse.fact_sales."
+                "sales_key"
+            ),
+            (
+                "warehouse.dim_customer."
+                "customer_key"
+            ),
+            (
+                "warehouse.dim_customer."
+                "customer_name"
+            ),
+        ],
+    )
+
+
+    generator.repair_from_context(
+
+        question=(
+            retrieved_context.question
+        ),
+
+        generation_context=context,
+
+        previous_result=(
+            previous_result
+        ),
+
+        validation_result=(
+            build_invalid_validation_result()
+        ),
+    )
+
+
+    assert (
+        formatter.received_context
+        is
+        context
+    )
+
+def test_blocked_validation_cannot_be_repaired(
+    retrieved_context,
+):
+
+    llm = FakeLLMClient(
+        response=(
+            build_repaired_response()
+        )
+    )
+
+
+    generator = SQLGenerator(
+        llm
+    )
+
+
+    context = (
+        generator.build_context(
+            retrieved_context
+        )
+    )
+
+
+    previous_result = SQLGenerationResult(
+
+        status=(
+            GenerationStatus.GENERATED
+        ),
+
+        sql=(
+            "DELETE FROM "
+            "warehouse.fact_sales"
+        ),
+
+        explanation=(
+            "GENERATED: Initial query."
+        ),
+
+        tables_used=[
+            "warehouse.fact_sales"
+        ],
+
+        columns_used=[],
+    )
+
+
+    validation = SQLValidationResult(
+
+        status=(
+            SQLValidationStatus.BLOCKED
+        ),
+
+        issues=[
+            ValidationIssue(
+
+                code=(
+                    ValidationIssueCode
+                    .DISALLOWED_STATEMENT
+                ),
+
+                message=(
+                    "Statement is not allowed."
+                ),
+            )
+        ],
+    )
+
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "INVALID validation"
+        ),
+    ):
+
+        generator.repair_from_context(
+
+            question=(
+                retrieved_context.question
+            ),
+
+            generation_context=context,
+
+            previous_result=(
+                previous_result
+            ),
+
+            validation_result=(
+                validation
+            ),
+        )
+
+
+    assert (
+        len(llm.calls)
+        ==
+        0
+    )
+
+
+def test_valid_sql_cannot_be_repaired(
+    retrieved_context,
+):
+
+    llm = FakeLLMClient(
+        response=(
+            build_repaired_response()
+        )
+    )
+
+
+    generator = SQLGenerator(
+        llm
+    )
+
+
+    context = (
+        generator.build_context(
+            retrieved_context
+        )
+    )
+
+
+    previous_result = SQLGenerationResult(
+
+        status=(
+            GenerationStatus.GENERATED
+        ),
+
+        sql=(
+            "SELECT revenue "
+            "FROM warehouse.fact_sales"
+        ),
+
+        explanation=(
+            "GENERATED: Initial query."
+        ),
+
+        tables_used=[
+            "warehouse.fact_sales"
+        ],
+
+        columns_used=[
+            "warehouse.fact_sales.revenue"
+        ],
+    )
+
+
+    validation = SQLValidationResult(
+
+        status=(
+            SQLValidationStatus.VALID
+        ),
+
+        issues=[],
+
+        safe_sql=(
+            "SELECT revenue "
+            "FROM warehouse.fact_sales "
+            "LIMIT 500"
+        ),
+    )
+
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "INVALID validation"
+        ),
+    ):
+
+        generator.repair_from_context(
+
+            question=(
+                retrieved_context.question
+            ),
+
+            generation_context=context,
+
+            previous_result=(
+                previous_result
+            ),
+
+            validation_result=(
+                validation
+            ),
+        )
+
+
+    assert (
+        len(llm.calls)
+        ==
+        0
+    )
+
+def test_non_generated_result_cannot_be_repaired(
+    retrieved_context,
+):
+
+    llm = FakeLLMClient(
+        response=(
+            build_repaired_response()
+        )
+    )
+
+
+    generator = SQLGenerator(
+        llm
+    )
+
+
+    context = (
+        generator.build_context(
+            retrieved_context
+        )
+    )
+
+
+    previous_result = SQLGenerationResult(
+
+        status=(
+            GenerationStatus
+            .UNANSWERABLE
+        ),
+
+        sql=None,
+
+        explanation=(
+            "UNANSWERABLE: Missing data."
+        ),
+    )
+
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "previous GENERATED"
+        ),
+    ):
+
+        generator.repair_from_context(
+
+            question=(
+                retrieved_context.question
+            ),
+
+            generation_context=context,
+
+            previous_result=(
+                previous_result
+            ),
+
+            validation_result=(
+                build_invalid_validation_result()
+            ),
+        )
+
+
+    assert (
+        len(llm.calls)
+        ==
+        0
+    )

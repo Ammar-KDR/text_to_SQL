@@ -347,6 +347,8 @@ metrics:
 
     business_rules:
       - Product attribution must come from sales records
+      - Product-level aggregation must use product_key as the authoritative grouping key
+      - product_name may be included as a human-readable display attribute but must not replace product_key
 
     forbidden_sources: []
 
@@ -383,6 +385,7 @@ metrics:
 
     business_rules:
       - Ranking metric must be specified
+      - Product ranking must preserve product_key as the authoritative product identity
 
     forbidden_sources: []
 

@@ -9,3 +9,4 @@ pyyaml
 sentence-transformers
 qdrant-client
 openai
+sqlglot

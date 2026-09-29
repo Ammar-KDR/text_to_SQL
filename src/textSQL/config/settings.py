@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     DATABASE_URL: str = ""
+    RUNTIME_DATABASE_URL: str = ""
 
     llm_provider: str = "lmstudio"
 
